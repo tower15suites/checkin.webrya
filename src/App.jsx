@@ -2,6 +2,8 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import CheckInPortal from './pages/CheckInPortal.jsx'
 import AdminLogin from './pages/AdminLogin.jsx'
 import AdminDashboard from './pages/AdminDashboard.jsx'
+import PrivacyPolicy from './pages/PrivacyPolicy.jsx'
+import TermsOfService from './pages/TermsOfService.jsx'
 import { AdminAuthProvider, useAdminAuth } from './hooks/useAdminAuth.jsx'
 
 function ProtectedRoute({ children }) {
@@ -18,6 +20,8 @@ export default function App() {
             {/* Guest Check-In Portal */}
             <Route path="/" element={<CheckInPortal />} />
             <Route path="/checkin" element={<CheckInPortal />} />
+            <Route path="/privacy" element={<PrivacyPolicy />} />
+            <Route path="/terms" element={<TermsOfService />} />
 
             {/* Admin */}
             <Route path="/admin/login" element={<AdminLogin />} />

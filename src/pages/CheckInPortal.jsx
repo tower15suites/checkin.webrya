@@ -13,6 +13,7 @@ export default function CheckInPortal() {
   const [photoFile, setPhotoFile] = useState(null)
   const [photoPreview, setPhotoPreview] = useState(null)
   const [useCamera, setUseCamera] = useState(false)
+  const [gdprConsent, setGdprConsent] = useState(false)
   const videoRef = useRef(null)
   const streamRef = useRef(null)
 
@@ -160,6 +161,7 @@ export default function CheckInPortal() {
   // ── STEP 3 → Submit ─────────────────────────────────────────
   async function handleSubmit() {
     if (!photoFile) { setError('Ανεβάστε φωτογραφία ταυτότητας.'); return }
+    if (!gdprConsent) { setError('Απαιτείται η αποδοχή των Όρων Χρήσης και της Πολιτικής Απορρήτου για να συνεχίσετε.'); return }
     setError('')
     setLoading(true)
 
@@ -186,6 +188,8 @@ export default function CheckInPortal() {
           afm: guest.afm || null,
           nationality: guest.nationality,
           photo_url: filename,
+          gdpr_consent: true,
+          gdpr_consent_at: new Date().toISOString(),
         })
       if (insertErr) throw insertErr
 
@@ -216,11 +220,9 @@ export default function CheckInPortal() {
           })
 
           if (!sendRes.ok) {
-            // Non-fatal: το check-in ολοκληρώθηκε, απλώς το email μπορεί να καθυστερήσει
             console.warn('send-codes warning:', await sendRes.text())
           }
         } catch (sendErr) {
-          // Non-fatal: δεν κάνουμε throw — το check-in ολοκληρώθηκε επιτυχώς
           console.warn('send-codes non-fatal error:', sendErr)
         }
       }
@@ -479,13 +481,36 @@ export default function CheckInPortal() {
 
             {error && <p className="text-red-400 text-sm text-center mt-3">{error}</p>}
 
-            <div className="flex gap-3 mt-4">
+            {/* GDPR Consent */}
+            <div className="border border-stone-800 bg-stone-900/30 p-3 mt-4">
+              <label className="flex items-start gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={gdprConsent}
+                  onChange={e => { setGdprConsent(e.target.checked); setError('') }}
+                  className="mt-0.5 w-4 h-4 flex-shrink-0 accent-amber-600"
+                />
+                <span className="text-stone-400 text-xs leading-relaxed">
+                  Συμφωνώ με τους{' '}
+                  <a href="/terms" target="_blank" rel="noopener noreferrer" className="text-brand-400 underline">
+                    Όρους Χρήσης
+                  </a>
+                  {' '}και την{' '}
+                  <a href="/privacy" target="_blank" rel="noopener noreferrer" className="text-brand-400 underline">
+                    Πολιτική Απορρήτου
+                  </a>
+                  . Τα δεδομένα μου θα διαγραφούν αυτόματα εντός 90 ημερών από το check-out. *
+                </span>
+              </label>
+            </div>
+
+            <div className="flex gap-3 mt-3">
               <button type="button" className="btn-ghost flex-1" onClick={() => setStep(2)}>← Πίσω</button>
               <button
                 type="button"
                 className="btn-primary flex-1"
                 onClick={handleSubmit}
-                disabled={loading || !photoFile}
+                disabled={loading || !photoFile || !gdprConsent}
               >
                 {loading ? 'Αποθήκευση...' : 'Ολοκλήρωση ✓'}
               </button>
