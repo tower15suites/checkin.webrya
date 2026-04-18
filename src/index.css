@@ -1,0 +1,134 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-stone-950 text-stone-100 font-body antialiased;
+    min-height: 100dvh;
+  }
+
+  h1, h2, h3 {
+    @apply font-display;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-brand-500 hover:bg-brand-400 text-white font-body font-medium
+           px-6 py-3.5 rounded-none tracking-widest uppercase text-xs
+           transition-all duration-300 ease-out
+           disabled:opacity-40 disabled:cursor-not-allowed
+           active:scale-95;
+    letter-spacing: 0.15em;
+  }
+
+  .btn-ghost {
+    @apply border border-stone-700 hover:border-stone-400 text-stone-300 hover:text-white
+           font-body font-medium px-6 py-3.5 rounded-none tracking-widest uppercase text-xs
+           transition-all duration-300 ease-out
+           active:scale-95;
+    letter-spacing: 0.15em;
+  }
+
+  .input-field {
+    @apply w-full bg-stone-900 border border-stone-700 
+           focus:border-brand-400 focus:outline-none
+           text-white font-body px-4 py-3.5 
+           placeholder-stone-500 
+           transition-colors duration-200
+           rounded-none;
+  }
+
+  .card {
+    @apply bg-stone-900 border border-stone-800 p-6;
+  }
+
+  .label {
+    @apply block text-xs font-body font-medium text-stone-400 uppercase tracking-widest mb-2;
+    letter-spacing: 0.12em;
+  }
+
+  .divider {
+    @apply w-12 h-px bg-brand-500 mx-auto my-6;
+  }
+
+  .step-indicator {
+    @apply w-8 h-8 rounded-full flex items-center justify-center text-xs font-mono font-medium;
+  }
+}
+
+/* Grain texture overlay */
+.grain::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 9999;
+  opacity: 0.4;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: #0f0e0d; }
+::-webkit-scrollbar-thumb { background: #3d3935; border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: #8B5E2A; }
+
+/* File upload zone */
+.upload-zone {
+  @apply border-2 border-dashed border-stone-700 
+         hover:border-brand-500 hover:bg-brand-500/5
+         transition-all duration-300 cursor-pointer
+         flex flex-col items-center justify-center
+         min-h-[180px] p-6 text-center;
+}
+
+/* Progress bar */
+.progress-track {
+  @apply w-full h-px bg-stone-800 relative;
+}
+
+.progress-fill {
+  @apply h-full bg-brand-500 transition-all duration-700 ease-out;
+}
+
+/* Room status badge */
+.badge-ready {
+  @apply bg-emerald-900/50 text-emerald-400 border border-emerald-800 
+         text-xs font-mono px-2 py-0.5;
+}
+
+.badge-pending {
+  @apply bg-amber-900/50 text-amber-400 border border-amber-800
+         text-xs font-mono px-2 py-0.5;
+}
+
+.badge-occupied {
+  @apply bg-blue-900/50 text-blue-400 border border-blue-800
+         text-xs font-mono px-2 py-0.5;
+}
+
+/* Fade animations */
+.animate-in {
+  animation: fadeUp 0.5s ease forwards;
+}
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.delay-1 { animation-delay: 0.1s; opacity: 0; }
+.delay-2 { animation-delay: 0.2s; opacity: 0; }
+.delay-3 { animation-delay: 0.3s; opacity: 0; }
+.delay-4 { animation-delay: 0.4s; opacity: 0; }
+.delay-5 { animation-delay: 0.5s; opacity: 0; }

@@ -1,0 +1,22 @@
+{
+  "name": "Tower 15 — Online Check-In",
+  "short_name": "T15 Check-In",
+  "description": "Online check-in portal for Tower 15 Suites",
+  "start_url": "/admin",
+  "display": "standalone",
+  "background_color": "#0f0e0d",
+  "theme_color": "#0f0e0d",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

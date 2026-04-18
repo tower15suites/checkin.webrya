@@ -1,0 +1,269 @@
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+
+const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY')!
+const FROM_EMAIL = 'info@tower15suites.gr'
+const FROM_NAME = 'Tower 15 Suites'
+
+const supabase = createClient(
+  Deno.env.get('SUPABASE_URL')!,
+  Deno.env.get('SERVICE_ROLE_KEY')!
+)
+
+async function sendEmail(to: string, subject: string, html: string) {
+  const res = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${RESEND_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      from: `${FROM_NAME} <${FROM_EMAIL}>`,
+      to: [to],
+      subject,
+      html,
+    }),
+  })
+  if (!res.ok) throw new Error(`Resend error: ${await res.text()}`)
+  return res.json()
+}
+
+function buildEmailHtml(guest: any, room: any, reservation: any) {
+  const checkInFormatted = new Date(reservation.check_in_date).toLocaleDateString('el-GR', {
+    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+  })
+  const checkOutFormatted = new Date(reservation.check_out_date).toLocaleDateString('el-GR', {
+    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+  })
+
+  return `<!DOCTYPE html>
+<html lang="el">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Κωδικοί Δωματίου — Tower 15 Suites</title>
+</head>
+<body style="margin:0;padding:0;background:#0f0e0d;font-family:'Georgia',serif;color:#f5f0e8;">
+<div style="max-width:560px;margin:0 auto;padding:20px;">
+
+  <!-- Header -->
+  <div style="text-align:center;padding:40px 0 30px;border-bottom:1px solid #3d3935;">
+    <div style="display:inline-block;background:#8B5E2A;width:52px;height:52px;line-height:52px;text-align:center;font-family:monospace;font-weight:bold;color:white;font-size:15px;letter-spacing:1px;">T15</div>
+    <h1 style="font-size:28px;font-weight:300;color:#f5f0e8;margin:16px 0 4px;letter-spacing:0.05em;">Tower 15 Suites</h1>
+    <p style="color:#6b6460;font-size:13px;margin:0;font-family:sans-serif;text-transform:uppercase;letter-spacing:0.1em;">Κωδικοί Πρόσβασης</p>
+  </div>
+
+  <!-- Greeting -->
+  <div style="padding:32px 0 20px;">
+    <p style="font-size:17px;color:#d4bc98;margin:0 0 12px;font-weight:300;">Αγαπητέ/ή ${guest.first_name} ${guest.last_name},</p>
+    <p style="font-size:14px;color:#8a7f78;line-height:1.8;margin:0;font-family:sans-serif;">
+      Σας καλωσορίζουμε στο <strong style="color:#c09a68;">Tower 15 Suites</strong>! 
+      Το online check-in σας ολοκληρώθηκε και παρακάτω θα βρείτε όλα τα στοιχεία πρόσβασης για τη διαμονή σας.
+    </p>
+  </div>
+
+  <!-- Room + Reservation info -->
+  <div style="background:#1a1816;border:1px solid #3d3935;padding:28px;margin:8px 0 24px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;padding-bottom:16px;border-bottom:1px solid #2d2b29;">
+      <div>
+        <div style="font-family:sans-serif;font-size:10px;color:#6b6460;text-transform:uppercase;letter-spacing:0.12em;margin-bottom:4px;">Δωμάτιο</div>
+        <div style="font-family:monospace;font-size:38px;color:#f5f0e8;font-weight:bold;line-height:1;">${room.room_number}</div>
+        <div style="font-family:sans-serif;font-size:11px;color:#8a7f78;margin-top:4px;">Όροφος ${room.floor}</div>
+      </div>
+      <div style="text-align:right;">
+        <div style="font-family:sans-serif;font-size:10px;color:#6b6460;text-transform:uppercase;letter-spacing:0.12em;margin-bottom:4px;">Αριθμός Κράτησης</div>
+        <div style="font-family:monospace;font-size:14px;color:#c09a68;letter-spacing:0.05em;">${reservation.reservation_code}</div>
+      </div>
+    </div>
+
+    <!-- Door code -->
+    <div style="margin-bottom:16px;padding:16px;background:#0f0e0d;border-left:3px solid #8B5E2A;">
+      <div style="font-family:sans-serif;font-size:10px;color:#6b6460;text-transform:uppercase;letter-spacing:0.12em;margin-bottom:8px;">🔒 Κωδικός Εισόδου — Εξώπορτα Κτιρίου</div>
+      <div style="font-family:sans-serif;font-size:14px;color:#d4bc98;line-height:1.7;">${room.door_code}</div>
+    </div>
+
+    <!-- Keylocker -->
+    <div style="margin-bottom:16px;padding:16px;background:#0f0e0d;border-left:3px solid #8B5E2A;">
+      <div style="font-family:sans-serif;font-size:10px;color:#6b6460;text-transform:uppercase;letter-spacing:0.12em;margin-bottom:8px;">🗝️ Κωδικός Keylocker — Κλειδί Δωματίου</div>
+      <div style="font-family:monospace;font-size:34px;color:#f5f0e8;font-weight:bold;letter-spacing:0.25em;">${room.keylocker_code}</div>
+      <div style="font-family:sans-serif;font-size:11px;color:#6b6460;margin-top:6px;">Ο keylocker βρίσκεται στο διάδρομο κοντά στην πόρτα σας.</div>
+    </div>
+
+    <!-- WiFi -->
+    <div style="padding:16px;background:#0f0e0d;border-left:3px solid #3d3935;">
+      <div style="font-family:sans-serif;font-size:10px;color:#6b6460;text-transform:uppercase;letter-spacing:0.12em;margin-bottom:10px;">📶 WiFi</div>
+      <div style="margin-bottom:6px;">
+        <span style="font-family:sans-serif;font-size:11px;color:#6b6460;">Δίκτυο: </span>
+        <span style="font-family:monospace;font-size:15px;color:#c09a68;font-weight:bold;">${room.wifi_ssid}</span>
+      </div>
+      <div>
+        <span style="font-family:sans-serif;font-size:11px;color:#6b6460;">Κωδικός: </span>
+        <span style="font-family:monospace;font-size:15px;color:#c09a68;font-weight:bold;">${room.wifi_password}</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Dates -->
+  <div style="display:flex;gap:12px;margin-bottom:24px;">
+    <div style="flex:1;background:#1a1816;border:1px solid #2d2b29;padding:16px;text-align:center;">
+      <div style="font-family:sans-serif;font-size:10px;color:#6b6460;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:6px;">Check-in</div>
+      <div style="font-family:sans-serif;font-size:13px;color:#f5f0e8;line-height:1.4;">${checkInFormatted}</div>
+      <div style="font-family:monospace;font-size:11px;color:#8B5E2A;margin-top:4px;">από 15:00</div>
+    </div>
+    <div style="flex:1;background:#1a1816;border:1px solid #2d2b29;padding:16px;text-align:center;">
+      <div style="font-family:sans-serif;font-size:10px;color:#6b6460;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:6px;">Check-out</div>
+      <div style="font-family:sans-serif;font-size:13px;color:#f5f0e8;line-height:1.4;">${checkOutFormatted}</div>
+      <div style="font-family:monospace;font-size:11px;color:#8B5E2A;margin-top:4px;">έως 11:30</div>
+    </div>
+  </div>
+
+  <!-- Notice -->
+  <div style="background:#1a1410;border:1px solid #3d2e1e;padding:16px;margin-bottom:28px;">
+    <p style="font-family:sans-serif;font-size:12px;color:#8a7060;margin:0;line-height:1.8;">
+      ⚠️ Τα δωμάτια είναι διαθέσιμα από τις <strong style="color:#c09a68;">15:00</strong>. Για check-out παρακαλούμε αποχωρήστε έως τις <strong style="color:#c09a68;">11:30</strong>.<br>
+      Παρακαλούμε διατηρήστε τους κωδικούς σας ασφαλείς. Μην τους μοιραστείτε με τρίτους.
+    </p>
+  </div>
+
+  <!-- Contact -->
+  <div style="background:#1a1816;border:1px solid #2d2b29;padding:16px;margin-bottom:28px;text-align:center;">
+    <p style="font-family:sans-serif;font-size:12px;color:#6b6460;margin:0 0 8px;">Χρειάζεστε βοήθεια;</p>
+    <a href="tel:+306949655349" style="font-family:monospace;font-size:16px;color:#c09a68;text-decoration:none;font-weight:bold;">+30 6949655349</a>
+    <br>
+    <a href="mailto:info@tower15suites.gr" style="font-family:sans-serif;font-size:12px;color:#8a7f78;text-decoration:none;margin-top:6px;display:inline-block;">info@tower15suites.gr</a>
+  </div>
+
+  <!-- Footer -->
+  <div style="text-align:center;padding-top:24px;border-top:1px solid #2d2b29;">
+    <p style="font-family:sans-serif;font-size:12px;color:#4a4744;margin:0 0 4px;">Tower 15 Suites — Ιωάννου Φαρμάκη 15, Θεσσαλονίκη 546 29</p>
+    <p style="font-family:sans-serif;font-size:11px;color:#3d3a38;margin:0 0 6px;">
+      <a href="https://tower15suites.gr" style="color:#6b5c4a;text-decoration:none;">tower15suites.gr</a>
+    </p>
+    <p style="font-family:sans-serif;font-size:10px;color:#2e2c2a;margin:0;letter-spacing:0.05em;">
+      Designed &amp; Developed by <a href="https://webrya.com" style="color:#4a3f35;text-decoration:none;font-weight:bold;">Webrya</a>
+    </p>
+  </div>
+
+</div>
+</body>
+</html>`
+}
+
+Deno.serve(async (req) => {
+  const corsHeaders = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  }
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
+
+  try {
+    const body = await req.json().catch(() => ({}))
+    let reservationIds: string[] = []
+
+    if (body.reservationId) {
+      // ── Immediate trigger: single reservation after online check-in ──
+      reservationIds = [body.reservationId]
+    } else {
+      // ── Daily cron: only guests who completed online check-in ──
+      const today = new Date().toISOString().split('T')[0]
+      const { data, error } = await supabase
+        .from('reservations')
+        .select('id')
+        .eq('check_in_date', today)
+        .eq('codes_sent', false)
+        .eq('status', 'checked_in') // ✅ ΚΡΙΣΙΜΟ: μόνο αν έχει γίνει online check-in
+
+      if (error) throw new Error(`Query error: ${JSON.stringify(error)}`)
+      reservationIds = (data || []).map((r: any) => r.id)
+    }
+
+    let sent = 0, errors = 0, skipped = 0
+    const results: any[] = []
+
+    for (const resId of reservationIds) {
+      try {
+        const { data: reservation, error: fetchErr } = await supabase
+          .from('reservations')
+          .select('*, rooms(*), guest_checkins(*)')
+          .eq('id', resId)
+          .single()
+
+        if (fetchErr || !reservation) {
+          console.error(`Reservation ${resId} not found`)
+          skipped++
+          continue
+        }
+
+        // ✅ Double-check: δεν ξαναστέλνουμε αν ήδη εστάλησαν
+        if (reservation.codes_sent) {
+          console.log(`Codes already sent for ${resId}, skipping`)
+          skipped++
+          continue
+        }
+
+        // ✅ Double-check: μόνο αν status = checked_in
+        if (reservation.status !== 'checked_in') {
+          console.log(`Reservation ${resId} status is '${reservation.status}', skipping`)
+          skipped++
+          continue
+        }
+
+        const room = reservation.rooms
+        if (!room) {
+          console.error(`No room for reservation ${resId}`)
+          errors++
+          continue
+        }
+
+        // ✅ Email ΜΟΝΟ από guest_checkins — δεν χρησιμοποιούμε fallback HostHub email
+        const checkin = reservation.guest_checkins?.[0]
+        if (!checkin?.email) {
+          console.error(`No verified checkin email for reservation ${resId}`)
+          errors++
+          continue
+        }
+
+        const guestName = {
+          first_name: checkin.first_name,
+          last_name: checkin.last_name,
+        }
+
+        await sendEmail(
+          checkin.email,
+          `🗝️ Κωδικοί Δωματίου ${room.room_number} — Tower 15 Suites`,
+          buildEmailHtml(guestName, room, reservation)
+        )
+
+        await supabase
+          .from('reservations')
+          .update({
+            codes_sent: true,
+            codes_sent_at: new Date().toISOString(),
+          })
+          .eq('id', resId)
+
+        sent++
+        results.push({ id: resId, email: checkin.email, room: room.room_number })
+      } catch (e: any) {
+        console.error(`Error for ${resId}:`, e.message)
+        errors++
+      }
+    }
+
+    return new Response(
+      JSON.stringify({
+        message: `✓ Εστάλησαν ${sent} email. Παραλείφθηκαν: ${skipped}. Σφάλματα: ${errors}`,
+        sent,
+        skipped,
+        errors,
+        results,
+      }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    )
+  } catch (err: any) {
+    console.error('Fatal:', err.message)
+    return new Response(
+      JSON.stringify({ error: err.message }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    )
+  }
+})
