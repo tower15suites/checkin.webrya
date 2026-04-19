@@ -117,7 +117,7 @@ export default function AdminDashboard() {
     setLoading(true)
     const [{ data: r }, { data: res }, { data: ci }] = await Promise.all([
       supabase.from('rooms').select('*').order('room_number'),
-      supabase.from('reservations').select('*, rooms(room_number,floor,wifi_ssid,wifi_password,door_code,keylocker_code)').order('check_in_date'),
+      supabase.from('reservations').select('*, rooms(room_number,floor,wifi_ssid,wifi_password,door_code,keylocker_code)').gte('check_out_date', new Date().toISOString().split('T')[0]).order('check_in_date'),
       supabase.from('guest_checkins').select('*, reservations(reservation_code, rooms(room_number))').order('created_at', { ascending: false }).limit(50),
     ])
     setRooms(r || [])
