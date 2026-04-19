@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useAdminAuth } from '../hooks/useAdminAuth.jsx'
 import { supabase } from '../lib/supabase.js'
 
-const TABS = ['Ημερολόγιο', 'Κρατήσεις', 'Δωμάτια', 'Check-ins', 'Ρυθμίσεις']
+const TABS = ['Σήμερα', 'Ημερολόγιο', 'Κρατήσεις', 'Δωμάτια', 'Check-ins', 'Ρυθμίσεις']
 
 const ROOMS = ['01','101','102','103','201','202','203','301','302','303','401','402','403','501','502','601','701']
 
@@ -242,8 +242,10 @@ export default function AdminDashboard() {
   }
 
   const today = new Date().toISOString().split('T')[0]
-  const todayArrivals = reservations.filter(r => r.check_in_date === today)
-  const todayReady = rooms.filter(r => r.is_ready).length
+  const todayArrivals   = reservations.filter(r => r.check_in_date === today)
+  const todayCheckouts  = reservations.filter(r => r.check_out_date === today)
+  const todayStaying    = reservations.filter(r => r.check_in_date < today && r.check_out_date > today)
+  const todayReady      = rooms.filter(r => r.is_ready).length
 
   // Day names in Greek
   const dayNames = ['Κυρ','Δευ','Τρί','Τετ','Πέμ','Παρ','Σάβ']
@@ -263,18 +265,22 @@ export default function AdminDashboard() {
       </header>
 
       {/* Stats */}
-      <div className="border-b border-stone-800 px-4 py-3 grid grid-cols-3 gap-3">
-        <div className="text-center">
+      <div className="border-b border-stone-800 px-4 py-3 grid grid-cols-4 gap-0">
+        <div className="text-center cursor-pointer hover:bg-stone-900/50 py-1 rounded transition-colors" onClick={() => setTab(0)}>
           <div className="text-2xl font-mono text-white">{todayArrivals.length}</div>
-          <div className="text-stone-500 text-xs">Αφίξεις σήμερα</div>
+          <div className="text-stone-500 text-xs">Αφίξεις</div>
         </div>
-        <div className="text-center border-x border-stone-800">
-          <div className="text-2xl font-mono text-emerald-400">{todayReady}</div>
-          <div className="text-stone-500 text-xs">Έτοιμα</div>
+        <div className="text-center border-x border-stone-800 cursor-pointer hover:bg-stone-900/50 py-1 rounded transition-colors" onClick={() => setTab(0)}>
+          <div className="text-2xl font-mono text-sky-400">{todayStaying.length}</div>
+          <div className="text-stone-500 text-xs">Διαμένουν</div>
+        </div>
+        <div className="text-center border-r border-stone-800 cursor-pointer hover:bg-stone-900/50 py-1 rounded transition-colors" onClick={() => setTab(0)}>
+          <div className="text-2xl font-mono text-amber-400">{todayCheckouts.length}</div>
+          <div className="text-stone-500 text-xs">Αναχωρούν</div>
         </div>
         <div className="text-center">
           <div className="text-2xl font-mono text-brand-300">{reservations.length}</div>
-          <div className="text-stone-500 text-xs">Κρατήσεις</div>
+          <div className="text-stone-500 text-xs">Σύνολο</div>
         </div>
       </div>
 
@@ -295,8 +301,111 @@ export default function AdminDashboard() {
           <div className="flex items-center justify-center py-20 text-stone-500 text-sm animate-pulse">Φόρτωση...</div>
         ) : (
           <>
-            {/* ══ CALENDAR TAB ══ */}
+            {/* ══ ΣΗΜΕΡΑ TAB ══ */}
             {tab === 0 && (
+              <div className="max-w-2xl mx-auto p-4 space-y-5 pb-16">
+
+                {/* ── Αφίξεις σήμερα ── */}
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="text-lg">✈️</span>
+                    <h3 className="font-display text-lg text-white">Αφίξεις σήμερα</h3>
+                    <span className="ml-auto font-mono text-sm text-white bg-stone-800 px-2 py-0.5">{todayArrivals.length}</span>
+                  </div>
+                  {todayArrivals.length === 0 ? (
+                    <div className="text-stone-600 text-sm text-center py-6 border border-stone-800">Δεν υπάρχουν αφίξεις σήμερα</div>
+                  ) : (
+                    <div className="space-y-2">
+                      {todayArrivals.map(res => (
+                        <div key={res.id} className="card flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-3">
+                            <div className="font-mono text-2xl text-white font-bold w-12 text-center">{res.rooms?.room_number || '—'}</div>
+                            <div>
+                              <div className="text-white text-sm font-medium">{res.guest_first_name} {res.guest_last_name}</div>
+                              <div className="flex items-center gap-2 mt-0.5">
+                                <span className={`text-xs px-1.5 py-0.5 font-mono ${res.status === 'checked_in' ? 'bg-emerald-900/50 text-emerald-400 border border-emerald-800' : 'bg-amber-900/30 text-amber-400 border border-amber-800/50'}`}>
+                                  {res.status === 'checked_in' ? '✓ CHECKED IN' : 'PENDING'}
+                                </span>
+                                {res.platform && <span className="text-stone-600 text-xs">{res.platform}</span>}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="text-right text-xs text-stone-500 shrink-0">
+                            <div>έως {res.check_out_date}</div>
+                            {res.guest_phone && <a href={`tel:${res.guest_phone}`} className="text-brand-400 hover:text-brand-300 block mt-0.5">{res.guest_phone}</a>}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* ── Αναχωρήσεις σήμερα ── */}
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="text-lg">🚪</span>
+                    <h3 className="font-display text-lg text-white">Αναχωρήσεις σήμερα</h3>
+                    <span className="ml-auto font-mono text-sm text-white bg-stone-800 px-2 py-0.5">{todayCheckouts.length}</span>
+                  </div>
+                  {todayCheckouts.length === 0 ? (
+                    <div className="text-stone-600 text-sm text-center py-6 border border-stone-800">Δεν υπάρχουν αναχωρήσεις σήμερα</div>
+                  ) : (
+                    <div className="space-y-2">
+                      {todayCheckouts.map(res => (
+                        <div key={res.id} className="card flex items-center justify-between gap-3 opacity-80">
+                          <div className="flex items-center gap-3">
+                            <div className="font-mono text-2xl text-stone-400 font-bold w-12 text-center">{res.rooms?.room_number || '—'}</div>
+                            <div>
+                              <div className="text-stone-300 text-sm font-medium">{res.guest_first_name} {res.guest_last_name}</div>
+                              <div className="text-stone-600 text-xs mt-0.5">Check-out έως 11:30</div>
+                            </div>
+                          </div>
+                          {res.guest_phone && (
+                            <a href={`tel:${res.guest_phone}`} className="text-brand-400 text-xs shrink-0">{res.guest_phone}</a>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* ── Διαμένουν σήμερα ── */}
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="text-lg">🏨</span>
+                    <h3 className="font-display text-lg text-white">Διαμένουν σήμερα</h3>
+                    <span className="ml-auto font-mono text-sm text-white bg-stone-800 px-2 py-0.5">{todayStaying.length}</span>
+                  </div>
+                  {todayStaying.length === 0 ? (
+                    <div className="text-stone-600 text-sm text-center py-6 border border-stone-800">Δεν υπάρχουν διαμένοντες</div>
+                  ) : (
+                    <div className="space-y-2">
+                      {todayStaying.map(res => (
+                        <div key={res.id} className="card flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-3">
+                            <div className="font-mono text-2xl text-sky-400 font-bold w-12 text-center">{res.rooms?.room_number || '—'}</div>
+                            <div>
+                              <div className="text-white text-sm font-medium">{res.guest_first_name} {res.guest_last_name}</div>
+                              <div className="text-stone-500 text-xs mt-0.5">
+                                {res.check_in_date} → {res.check_out_date}
+                                {res.platform && <span className="ml-2 text-stone-600">{res.platform}</span>}
+                              </div>
+                            </div>
+                          </div>
+                          {res.guest_phone && (
+                            <a href={`tel:${res.guest_phone}`} className="text-brand-400 text-xs shrink-0">{res.guest_phone}</a>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+              </div>
+            )}
+
+            {/* ══ CALENDAR TAB ══ */}
+            {tab === 1 && (
               <div className="flex flex-col h-full">
                 {/* Calendar Header */}
                 <div className="flex items-center justify-between px-4 py-3 border-b border-stone-800 bg-stone-900/50 sticky top-0 z-10">
@@ -441,7 +550,7 @@ export default function AdminDashboard() {
             )}
 
             {/* ══ RESERVATIONS TAB ══ */}
-            {tab === 1 && (
+            {tab === 2 && (
               <div className="max-w-2xl mx-auto p-4 space-y-3">
                 <div className="flex items-center justify-between mb-2">
                   <h2 className="font-display text-xl text-white">Κρατήσεις</h2>
@@ -460,7 +569,7 @@ export default function AdminDashboard() {
             )}
 
             {/* ══ ROOMS TAB ══ */}
-            {tab === 2 && (
+            {tab === 3 && (
               <div className="max-w-2xl mx-auto p-4 space-y-3">
                 <h2 className="font-display text-xl text-white mb-4">Κατάσταση Δωματίων</h2>
                 {rooms.map(room => (
@@ -473,7 +582,7 @@ export default function AdminDashboard() {
             )}
 
             {/* ══ CHECKINS TAB ══ */}
-            {tab === 3 && (
+            {tab === 4 && (
               <div className="max-w-2xl mx-auto p-4">
                 <h2 className="font-display text-xl text-white mb-4">Online Check-Ins</h2>
                 {checkins.length === 0 && (
@@ -486,7 +595,7 @@ export default function AdminDashboard() {
             )}
 
             {/* ══ SETTINGS TAB ══ */}
-            {tab === 4 && (
+            {tab === 5 && (
               <div className="max-w-2xl mx-auto p-4 space-y-5 pb-16">
 
                 {/* Header */}
