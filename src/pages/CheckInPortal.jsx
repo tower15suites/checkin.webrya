@@ -592,6 +592,18 @@ export default function CheckInPortal() {
             </p>
           </div>
         )}
+      {/* Webrya credit */}
+      <div className="text-center mt-auto pt-6 pb-4 flex flex-col items-center gap-1.5">
+        <span className="text-stone-700 text-xs uppercase tracking-widest">Powered by</span>
+        <a href="https://webrya.com" target="_blank" rel="noopener noreferrer">
+          <img
+            src="/webrya-logo.webp"
+            alt="Webrya"
+            className="h-6 w-auto opacity-40 hover:opacity-80 transition-opacity"
+            style={{ mixBlendMode: 'screen' }}
+          />
+        </a>
+      </div>
       </main>
     </div>
   )
