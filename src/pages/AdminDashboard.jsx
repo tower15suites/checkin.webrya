@@ -489,36 +489,54 @@ export default function AdminDashboard() {
                               )
                             })}
 
-                            {/* Reservation blocks - absolutely positioned */}
+                            {/* Reservation blocks - HostHub style με rounded pill */}
                             {roomReservations.map(res => {
                               const { startCol, span } = getReservationSpan(res, calendarStart, DAYS_SHOWN)
                               if (span <= 0) return null
+
                               const color = getPlatformColor(res.platform)
                               const guestName = `${res.guest_first_name || ''} ${res.guest_last_name || ''}`.trim()
+
+                              // Έλεγχος αν η κράτηση ξεκινά/τελειώνει εντός του ορατού παραθύρου
+                              const calStartStr = formatDate(calendarStart)
+                              const calEndStr   = formatDate(addDays(calendarStart, DAYS_SHOWN))
+                              const startsInView = res.check_in_date  >= calStartStr
+                              const endsInView   = res.check_out_date <= calEndStr
+
+                              // Rounded corners: αριστερά αν ξεκινά εδώ, δεξιά αν τελειώνει εδώ
+                              const rLeft  = startsInView ? 14 : 0
+                              const rRight = endsInView   ? 14 : 0
+                              const borderRadius = `${rLeft}px ${rRight}px ${rRight}px ${rLeft}px`
+
+                              // Gap: 3px από αριστερά αν ξεκινά, 3px από δεξιά αν τελειώνει
+                              const gapLeft  = startsInView ? 3 : 0
+                              const gapRight = endsInView   ? 3 : 0
+
                               return (
                                 <div
                                   key={res.id}
                                   onClick={() => openEdit(res)}
                                   style={{
                                     position: 'absolute',
-                                    left: startCol * 36 + 2,
-                                    width: span * 36 - 4,
-                                    top: 4,
-                                    height: 36,
+                                    left: startCol * 36 + gapLeft,
+                                    width: span * 36 - gapLeft - gapRight,
+                                    top: 5,
+                                    height: 32,
                                     backgroundColor: color,
-                                    borderRadius: 3,
+                                    borderRadius,
                                     cursor: 'pointer',
                                     overflow: 'hidden',
                                     zIndex: 5,
+                                    opacity: res.status === 'checked_in' ? 1 : 0.85,
                                   }}
-                                  className="hover:brightness-110 transition-all flex items-center px-2 gap-1"
+                                  className="hover:brightness-110 transition-all flex items-center px-3 gap-1.5"
                                 >
-                                  <span className="text-white text-xs font-body truncate font-medium">
+                                  {res.status === 'checked_in' && (
+                                    <span className="text-white/80 text-xs flex-shrink-0">✓</span>
+                                  )}
+                                  <span className="text-white text-xs font-medium truncate" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.4)' }}>
                                     {guestName || res.reservation_code}
                                   </span>
-                                  {res.status === 'checked_in' && (
-                                    <span className="text-white/70 text-xs flex-shrink-0">✓</span>
-                                  )}
                                 </div>
                               )
                             })}
