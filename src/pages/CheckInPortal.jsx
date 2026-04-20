@@ -599,7 +599,7 @@ export default function CheckInPortal() {
           <img
             src="/webrya-logo.webp"
             alt="Webrya"
-            className="h-6 w-auto opacity-40 hover:opacity-80 transition-opacity"
+            className="h-8 w-auto opacity-40 hover:opacity-80 transition-opacity"
             style={{ mixBlendMode: 'screen' }}
           />
         </a>
