@@ -30,7 +30,11 @@ function addDays(date, days) {
 }
 
 function formatDate(d) {
-  return d.toISOString().split('T')[0]
+  // Use local date parts to avoid UTC offset shifting the date back by 1 day (Greece = UTC+3)
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
 }
 
 function parseDate(str) {
@@ -117,7 +121,7 @@ export default function AdminDashboard() {
     setLoading(true)
     const [{ data: r }, { data: res }, { data: ci }] = await Promise.all([
       supabase.from('rooms').select('*').order('room_number'),
-      supabase.from('reservations').select('*, rooms(room_number,floor,wifi_ssid,wifi_password,door_code,keylocker_code)').gte('check_out_date', new Date().toISOString().split('T')[0]).order('check_in_date'),
+      supabase.from('reservations').select('*, rooms(room_number,floor,wifi_ssid,wifi_password,door_code,keylocker_code)').gte('check_out_date', (() => { const n = new Date(); return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')}` })()).order('check_in_date'),
       supabase.from('guest_checkins').select('*, reservations(reservation_code, rooms(room_number))').order('created_at', { ascending: false }).limit(50),
     ])
     setRooms(r || [])
@@ -241,7 +245,8 @@ export default function AdminDashboard() {
     setTimeout(() => setMsg(''), 2000)
   }
 
-  const today = new Date().toISOString().split('T')[0]
+  const now = new Date()
+  const today = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`
   const todayArrivals   = reservations.filter(r => r.check_in_date === today)
   const todayCheckouts  = reservations.filter(r => r.check_out_date === today)
   const todayStaying    = reservations.filter(r => r.check_in_date < today && r.check_out_date > today)
@@ -489,54 +494,36 @@ export default function AdminDashboard() {
                               )
                             })}
 
-                            {/* Reservation blocks - HostHub style με rounded pill */}
+                            {/* Reservation blocks - absolutely positioned */}
                             {roomReservations.map(res => {
                               const { startCol, span } = getReservationSpan(res, calendarStart, DAYS_SHOWN)
                               if (span <= 0) return null
-
                               const color = getPlatformColor(res.platform)
                               const guestName = `${res.guest_first_name || ''} ${res.guest_last_name || ''}`.trim()
-
-                              // Έλεγχος αν η κράτηση ξεκινά/τελειώνει εντός του ορατού παραθύρου
-                              const calStartStr = formatDate(calendarStart)
-                              const calEndStr   = formatDate(addDays(calendarStart, DAYS_SHOWN))
-                              const startsInView = res.check_in_date  >= calStartStr
-                              const endsInView   = res.check_out_date <= calEndStr
-
-                              // Rounded corners: αριστερά αν ξεκινά εδώ, δεξιά αν τελειώνει εδώ
-                              const rLeft  = startsInView ? 14 : 0
-                              const rRight = endsInView   ? 14 : 0
-                              const borderRadius = `${rLeft}px ${rRight}px ${rRight}px ${rLeft}px`
-
-                              // Gap: 3px από αριστερά αν ξεκινά, 3px από δεξιά αν τελειώνει
-                              const gapLeft  = startsInView ? 3 : 0
-                              const gapRight = endsInView   ? 3 : 0
-
                               return (
                                 <div
                                   key={res.id}
                                   onClick={() => openEdit(res)}
                                   style={{
                                     position: 'absolute',
-                                    left: startCol * 36 + gapLeft,
-                                    width: span * 36 - gapLeft - gapRight,
-                                    top: 5,
-                                    height: 32,
+                                    left: startCol * 36 + 2,
+                                    width: span * 36 - 4,
+                                    top: 4,
+                                    height: 36,
                                     backgroundColor: color,
-                                    borderRadius,
+                                    borderRadius: 3,
                                     cursor: 'pointer',
                                     overflow: 'hidden',
                                     zIndex: 5,
-                                    opacity: res.status === 'checked_in' ? 1 : 0.85,
                                   }}
-                                  className="hover:brightness-110 transition-all flex items-center px-3 gap-1.5"
+                                  className="hover:brightness-110 transition-all flex items-center px-2 gap-1"
                                 >
-                                  {res.status === 'checked_in' && (
-                                    <span className="text-white/80 text-xs flex-shrink-0">✓</span>
-                                  )}
-                                  <span className="text-white text-xs font-medium truncate" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.4)' }}>
+                                  <span className="text-white text-xs font-body truncate font-medium">
                                     {guestName || res.reservation_code}
                                   </span>
+                                  {res.status === 'checked_in' && (
+                                    <span className="text-white/70 text-xs flex-shrink-0">✓</span>
+                                  )}
                                 </div>
                               )
                             })}
