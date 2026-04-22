@@ -61,7 +61,10 @@ export default function CheckInPortal() {
       } else {
         setError(t.errorFillCodeOrLastname); setLoading(false); return
       }
-      const { data, error: err } = await query.single()
+      // Use maybeSingle() to avoid 406 when 0 or multiple results
+      // For lastname search, take the first match
+      const { data: rawData, error: err } = await query.limit(1).maybeSingle()
+      const data = rawData
       if (err || !data) {
         setError(t.errorNotFound)
       } else if (data.status === 'checked_in' && data.codes_sent) {

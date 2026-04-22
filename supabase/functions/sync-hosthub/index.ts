@@ -107,14 +107,16 @@ Deno.serve(async (req) => {
 
           const ex     = existingMap.get(hid)
           const status = ex?.status === 'checked_in' ? 'checked_in' : 'pending'
-          const parts  = (b.guest_name || '').split(' ')
+          // Support both separate first/last name fields (manual bookings) and combined guest_name
+          const firstName = b.guest_first_name || (b.guest_name || '').split(' ')[0] || null
+          const lastName  = b.guest_last_name  || (b.guest_name || '').split(' ').slice(1).join(' ') || null
 
           const { error } = await supabase.from('reservations').upsert({
             hosthub_id:          hid,
             reservation_code:    b.reservation_id || hid,
             room_id:             roomId,
-            guest_first_name:    parts[0] || null,
-            guest_last_name:     parts.slice(1).join(' ') || null,
+            guest_first_name:    firstName,
+            guest_last_name:     lastName,
             guest_email:         b.guest_email || null,
             guest_phone:         b.guest_phone || null,
             check_in_date:       b.date_from,

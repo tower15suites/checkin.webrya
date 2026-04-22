@@ -35,6 +35,13 @@ function buildEmailHtml(guest: any, room: any, reservation: any) {
     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
   })
 
+  // ✅ FIX: Μετατροπή newlines σε <br> για σωστή εμφάνιση στο email
+  const doorCodeHtml = (room.door_code || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/\n/g, '<br>')
+
   return `<!DOCTYPE html>
 <html lang="el">
 <head>
@@ -75,10 +82,10 @@ function buildEmailHtml(guest: any, room: any, reservation: any) {
       </div>
     </div>
 
-    <!-- Door code -->
+    <!-- Building entrance code -->
     <div style="margin-bottom:16px;padding:16px;background:#0f0e0d;border-left:3px solid #8B5E2A;">
-      <div style="font-family:sans-serif;font-size:10px;color:#6b6460;text-transform:uppercase;letter-spacing:0.12em;margin-bottom:8px;">🔒 Κωδικός Εισόδου — Εξώπορτα Κτιρίου</div>
-      <div style="font-family:sans-serif;font-size:14px;color:#d4bc98;line-height:1.7;">${room.door_code}</div>
+      <div style="font-family:sans-serif;font-size:10px;color:#6b6460;text-transform:uppercase;letter-spacing:0.12em;margin-bottom:10px;">🔒 Κωδικός Εισόδου — Εξώπορτα Κτιρίου</div>
+      <div style="font-family:sans-serif;font-size:14px;color:#d4bc98;line-height:2.0;">${doorCodeHtml}</div>
     </div>
 
     <!-- Keylocker -->
@@ -161,16 +168,32 @@ Deno.serve(async (req) => {
 
     if (body.reservationId) {
       // ── Immediate trigger: single reservation after online check-in ──
-      reservationIds = [body.reservationId]
+      // ✅ FIX: Στέλνουμε αμέσως ΜΟΝΟ αν είναι μετά τις 15:00 Athens
+      // Αλλιώς το cron των 14:00 θα στείλει την κανονική ώρα
+      const nowAthens = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Athens' }))
+      const hourAthens = nowAthens.getHours()
+      const minuteAthens = nowAthens.getMinutes()
+      const isAfter1500 = hourAthens > 15 || (hourAthens === 15 && minuteAthens >= 0)
+
+      if (isAfter_1500(hourAthens, minuteAthens)) {
+        reservationIds = [body.reservationId]
+      } else {
+        // Πριν τις 15:00 — ο cron θα στείλει στις 14:00
+        console.log(`Check-in before 15:00 Athens (${hourAthens}:${minuteAthens}), deferring to cron`)
+        return new Response(
+          JSON.stringify({ message: 'Deferred to 14:00 cron — check-in before 15:00', deferred: true }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
     } else {
-      // ── Daily cron: only guests who completed online check-in ──
+      // ── Daily cron 14:00: only guests who completed online check-in ──
       const today = new Date().toISOString().split('T')[0]
       const { data, error } = await supabase
         .from('reservations')
         .select('id')
         .eq('check_in_date', today)
         .eq('codes_sent', false)
-        .eq('status', 'checked_in') // ✅ ΚΡΙΣΙΜΟ: μόνο αν έχει γίνει online check-in
+        .eq('status', 'checked_in')
 
       if (error) throw new Error(`Query error: ${JSON.stringify(error)}`)
       reservationIds = (data || []).map((r: any) => r.id)
@@ -187,59 +210,26 @@ Deno.serve(async (req) => {
           .eq('id', resId)
           .single()
 
-        if (fetchErr || !reservation) {
-          console.error(`Reservation ${resId} not found`)
-          skipped++
-          continue
-        }
-
-        // ✅ Double-check: δεν ξαναστέλνουμε αν ήδη εστάλησαν
-        if (reservation.codes_sent) {
-          console.log(`Codes already sent for ${resId}, skipping`)
-          skipped++
-          continue
-        }
-
-        // ✅ Double-check: μόνο αν status = checked_in
-        if (reservation.status !== 'checked_in') {
-          console.log(`Reservation ${resId} status is '${reservation.status}', skipping`)
-          skipped++
-          continue
-        }
+        if (fetchErr || !reservation) { skipped++; continue }
+        if (reservation.codes_sent) { skipped++; continue }
+        if (reservation.status !== 'checked_in') { skipped++; continue }
 
         const room = reservation.rooms
-        if (!room) {
-          console.error(`No room for reservation ${resId}`)
-          errors++
-          continue
-        }
+        if (!room) { errors++; continue }
 
-        // ✅ Email ΜΟΝΟ από guest_checkins — δεν χρησιμοποιούμε fallback HostHub email
         const checkin = reservation.guest_checkins?.[0]
-        if (!checkin?.email) {
-          console.error(`No verified checkin email for reservation ${resId}`)
-          errors++
-          continue
-        }
-
-        const guestName = {
-          first_name: checkin.first_name,
-          last_name: checkin.last_name,
-        }
+        if (!checkin?.email) { errors++; continue }
 
         await sendEmail(
           checkin.email,
           `🗝️ Κωδικοί Δωματίου ${room.room_number} — Tower 15 Suites`,
-          buildEmailHtml(guestName, room, reservation)
+          buildEmailHtml({ first_name: checkin.first_name, last_name: checkin.last_name }, room, reservation)
         )
 
-        await supabase
-          .from('reservations')
-          .update({
-            codes_sent: true,
-            codes_sent_at: new Date().toISOString(),
-          })
-          .eq('id', resId)
+        await supabase.from('reservations').update({
+          codes_sent: true,
+          codes_sent_at: new Date().toISOString(),
+        }).eq('id', resId)
 
         sent++
         results.push({ id: resId, email: checkin.email, room: room.room_number })
@@ -250,20 +240,14 @@ Deno.serve(async (req) => {
     }
 
     return new Response(
-      JSON.stringify({
-        message: `✓ Εστάλησαν ${sent} email. Παραλείφθηκαν: ${skipped}. Σφάλματα: ${errors}`,
-        sent,
-        skipped,
-        errors,
-        results,
-      }),
+      JSON.stringify({ message: `✓ Εστάλησαν ${sent} email. Παραλείφθηκαν: ${skipped}. Σφάλματα: ${errors}`, sent, skipped, errors, results }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   } catch (err: any) {
-    console.error('Fatal:', err.message)
-    return new Response(
-      JSON.stringify({ error: err.message }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    )
+    return new Response(JSON.stringify({ error: err.message }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
   }
 })
+
+function isAfter_1500(hour: number, minute: number): boolean {
+  return hour > 15 || (hour === 15 && minute >= 0)
+}
