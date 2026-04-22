@@ -1,15 +1,15 @@
 -- ============================================================
 -- 005: Cron Jobs (pg_cron)
--- Τρέξε στο Supabase SQL Editor ΤΕΛΕΥΤΑΙΟ, αφού έχεις κάνει
--- deploy τα Edge Functions.
+-- Τρέξε στο Supabase SQL Editor ΤΕΛΕΥΤΑΙΟ, αφού:
+--   1. Κάνεις deploy τα Edge Functions
+--   2. Αντικαταστήσεις SUPABASE_URL και SUPABASE_ANON_KEY παρακάτω
 -- ============================================================
 
 CREATE EXTENSION IF NOT EXISTS pg_cron;
 CREATE EXTENSION IF NOT EXISTS pg_net;
 
 -- ============================================================
--- Βοηθητική function: ασφαλές unschedule (δεν κρασάρει αν
--- το job δεν υπάρχει ακόμα)
+-- Βοηθητική function: ασφαλές unschedule
 -- ============================================================
 CREATE OR REPLACE FUNCTION safe_unschedule(jobname TEXT) RETURNS VOID AS $$
 BEGIN
@@ -20,20 +20,22 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- ============================================================
--- App settings για cron (χρειάζεται για current_setting)
+-- App settings για cron
+-- ⚠️ ΑΝΤΙΚΑΤΕΣΤΗΣΕ ΤΙΣ ΤΙΜΕΣ ΠΑΡΑΚΑΤΩ πριν τρέξεις!
 -- ============================================================
 CREATE TABLE IF NOT EXISTS app_cron_settings (
   key   TEXT PRIMARY KEY,
   value TEXT
 );
 
+-- ΣΗΜΑΝΤΙΚΟ: Αντικατάστησε https://xxxx.supabase.co και το anon key
 INSERT INTO app_cron_settings (key, value) VALUES
-  ('supabase_url',      '__SUPABASE_URL__'),
-  ('supabase_anon_key', '__SUPABASE_ANON_KEY__')
+  ('supabase_url',      'https://fbknscgkjdsxnaugyzaq.supabase.co'),
+  ('supabase_anon_key', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZia25zY2dramRzeG5hdWd5emFxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU3NzI0NDYsImV4cCI6MjA5MTM0ODQ0Nn0.J-tNm4ndoJcdxdava201YHMDHqGwAPYdepgLhQyXTuo')
 ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
 
 -- ============================================================
--- 1. SYNC HOSTHUB — κάθε 30 λεπτά
+-- 1. SYNC HOSTHUB — κάθε 30 λεπτά (αυτόματος sync)
 -- ============================================================
 SELECT safe_unschedule('sync-hosthub-auto');
 SELECT cron.schedule(
@@ -73,7 +75,7 @@ SELECT cron.schedule(
 
 -- ============================================================
 -- 3. SEND CODES — 14:00 Athens (11:00 UTC)
---    Στέλνει κωδικούς ΜΟΝΟ σε guests με online check-in (status=checked_in)
+--    Στέλνει κωδικούς ΜΟΝΟ σε guests με online check-in
 -- ============================================================
 SELECT safe_unschedule('send-checkin-codes-14h');
 SELECT cron.schedule(
@@ -93,7 +95,6 @@ SELECT cron.schedule(
 
 -- ============================================================
 -- 4. CHECKOUT REMINDER — 08:30 Athens (05:30 UTC)
---    Υπενθύμιση αναχώρησης έως 11:30
 -- ============================================================
 SELECT safe_unschedule('send-checkout-reminder');
 SELECT cron.schedule(

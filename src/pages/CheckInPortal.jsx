@@ -51,22 +51,37 @@ export default function CheckInPortal() {
     setLoading(true)
     try {
       let query
-      if (lookup.code) {
+      const hasCode = lookup.code.trim().length > 0
+      const hasLastname = lookup.lastname.trim().length > 0
+
+      if (!hasCode && !hasLastname) {
+        setError(t.errorFillCodeOrLastname); setLoading(false); return
+      }
+
+      if (hasCode) {
         const code = lookup.code.trim()
         query = supabase.from('reservations').select('*, rooms(*)')
           .or(`reservation_code.ilike.${code},hosthub_id.ilike.${code}`)
-      } else if (lookup.lastname) {
+      } else {
         query = supabase.from('reservations').select('*, rooms(*)')
           .ilike('guest_last_name', `%${lookup.lastname.trim()}%`)
-      } else {
-        setError(t.errorFillCodeOrLastname); setLoading(false); return
+          // FIX: φίλτρο μόνο για μελλοντικές + σημερινές κρατήσεις
+          .gte('check_out_date', new Date().toISOString().split('T')[0])
+          .order('check_in_date', { ascending: true })
       }
-      // Use maybeSingle() to avoid 406 when 0 or multiple results
-      // For lastname search, take the first match
+
       const { data: rawData, error: err } = await query.limit(1).maybeSingle()
       const data = rawData
+
       if (err || !data) {
-        setError(t.errorNotFound)
+        // FIX: αν δεν βρέθηκε με επίθετο, δοκιμάζουμε να κάνουμε sync πρώτα
+        if (hasLastname && !hasCode) {
+          setError(lang === 'el'
+            ? 'Η κράτηση δεν βρέθηκε. Βεβαιωθείτε ότι το επίθετο είναι σωστό, ή χρησιμοποιήστε τον αριθμό κράτησης.'
+            : 'Reservation not found. Please check your last name spelling, or use your reservation number.')
+        } else {
+          setError(t.errorNotFound)
+        }
       } else if (data.status === 'checked_in' && data.codes_sent) {
         setError(t.errorAlreadyCheckedIn)
       } else {

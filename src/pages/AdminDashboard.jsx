@@ -230,6 +230,22 @@ export default function AdminDashboard() {
     }
   }
 
+  async function deleteReservation(id) {
+    if (!confirm('Διαγραφή κράτησης; Η ενέργεια είναι μόνιμη.')) return
+    // Διαγραφή guest_checkins πρώτα (FK — CASCADE μόνο αν τρέχει migration 006)
+    await supabase.from('guest_checkins').delete().eq('reservation_id', id)
+    const { error } = await supabase.from('reservations').delete().eq('id', id)
+    if (!error) {
+      setReservations(rs => rs.filter(r => r.id !== id))
+      setEditMode(false)
+      setSelectedRes(null)
+      setMsg('✓ Κράτηση διαγράφηκε')
+      setTimeout(() => setMsg(''), 3000)
+    } else {
+      setMsg('✗ Σφάλμα διαγραφής: ' + error.message)
+    }
+  }
+
   async function toggleRoomReady(room) {
     await supabase.from('rooms').update({ is_ready: !room.is_ready }).eq('id', room.id)
     setRooms(rs => rs.map(r => r.id === room.id ? { ...r, is_ready: !r.is_ready } : r))
@@ -954,6 +970,10 @@ export default function AdminDashboard() {
               <div className="flex gap-3">
                 <button onClick={() => { setEditMode(false); setSelectedRes(null) }}
                   className="btn-ghost flex-1">Ακύρωση</button>
+                <button
+                  onClick={() => deleteReservation(selectedRes.id)}
+                  className="btn-ghost flex-1 border-red-800 text-red-400 hover:text-red-200 hover:border-red-600"
+                >🗑️ Διαγραφή</button>
                 <button onClick={saveEdit} className="btn-primary flex-1">Αποθήκευση</button>
               </div>
             </div>
