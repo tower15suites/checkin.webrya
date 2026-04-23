@@ -2,7 +2,7 @@ export default function TermsOfService() {
   return (
     <div className="min-h-dvh bg-stone-950 flex flex-col">
       <header className="border-b border-stone-800/60 px-6 py-5">
-        <img src="/logo-tower15.jpg" alt="Tower 15 Suites" className="h-10 w-auto" />
+        <img src="/logo-tower15suites.png" alt="Tower 15 Suites" className="h-10 w-auto" />
       </header>
 
       <main className="flex-1 max-w-2xl mx-auto px-5 py-12 w-full">

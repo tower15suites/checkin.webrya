@@ -28,7 +28,7 @@ export default function AdminLogin() {
       <div className="w-full max-w-xs animate-in">
         {/* Logo */}
         <div className="text-center mb-10">
-          <img src="/logo-tower15.jpg" alt="Tower 15 Suites" className="h-16 w-auto mx-auto mb-2" />
+          <img src="/logo-tower15suites.png" alt="Tower 15 Suites" className="h-16 w-auto mx-auto mb-2" />
           <h1 className="font-display text-3xl font-light text-white">Admin Panel</h1>
         </div>
 

@@ -192,7 +192,7 @@ export default function CheckInPortal() {
     <div className="min-h-dvh bg-stone-950 flex flex-col">
       {/* Header */}
       <header className="border-b border-stone-800/60 px-6 py-5 flex items-center justify-between">
-        <img src="/logo-tower15.jpg" alt="Tower 15 Suites" className="h-10 w-auto" />
+        <img src="/logo-tower15suites.png" alt="Tower 15 Suites" className="h-10 w-auto" />
         <div className="flex items-center gap-4">
           {step > 0 && step < 4 && (
             <div className="text-stone-500 font-mono text-xs">{step}/{t.steps.length - 1}</div>

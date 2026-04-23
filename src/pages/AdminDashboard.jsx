@@ -272,7 +272,7 @@ export default function AdminDashboard() {
       {/* Header */}
       <header className="border-b border-stone-800 px-4 py-3 flex items-center justify-between sticky top-0 bg-stone-950/95 backdrop-blur z-50">
         <div className="flex items-center gap-3">
-          <img src="/logo-tower15.jpg" alt="Tower 15 Suites" className="h-9 w-auto" />
+          <img src="/logo-tower15suites.png" alt="Tower 15 Suites" className="h-9 w-auto" />
         </div>
         <div className="flex items-center gap-3">
           {msg && <span className="text-xs text-brand-300 font-mono hidden sm:block animate-pulse">{msg}</span>}
@@ -505,53 +505,74 @@ export default function AdminDashboard() {
                               )
                             })}
 
-                            {/* Reservation blocks - HostHub style με rounded pill */}
+                            {/* Reservation blocks - HostHub style με βέλη */}
                             {roomReservations.map(res => {
-                              const { startCol, span } = getReservationSpan(res, calendarStart, DAYS_SHOWN)
-                              if (span <= 0) return null
-
-                              const color = getPlatformColor(res.platform)
-                              const guestName = `${res.guest_first_name || ''} ${res.guest_last_name || ''}`.trim()
-
-                              // Έλεγχος αν η κράτηση ξεκινά/τελειώνει εντός του ορατού παραθύρου
+                              const CELL = 36
                               const calStartStr = formatDate(calendarStart)
                               const calEndStr   = formatDate(addDays(calendarStart, DAYS_SHOWN))
                               const startsInView = res.check_in_date  >= calStartStr
                               const endsInView   = res.check_out_date <= calEndStr
 
-                              // Rounded corners: αριστερά αν ξεκινά εδώ, δεξιά αν τελειώνει εδώ
-                              const rLeft  = startsInView ? 14 : 0
-                              const rRight = endsInView   ? 14 : 0
-                              const borderRadius = `${rLeft}px ${rRight}px ${rRight}px ${rLeft}px`
+                              const resStart  = parseDate(res.check_in_date)
+                              const resEnd    = parseDate(res.check_out_date)
+                              const calEnd    = addDays(calendarStart, DAYS_SHOWN)
+                              const visStart  = resStart < calendarStart ? calendarStart : resStart
+                              const visEnd    = resEnd   > calEnd        ? calEnd        : resEnd
+                              const startCol  = Math.floor((visStart - calendarStart) / 86400000)
+                              const fullDays  = Math.floor((visEnd - visStart) / 86400000)
 
-                              // Gap: 3px από αριστερά αν ξεκινά, 3px από δεξιά αν τελειώνει
-                              const gapLeft  = startsInView ? 3 : 0
-                              const gapRight = endsInView   ? 3 : 0
+                              // Bar τελειώνει στο μισό της checkout μέρας (όπως HostHub)
+                              const barWidth  = endsInView
+                                ? fullDays * CELL + CELL / 2 - 2
+                                : fullDays * CELL
+
+                              if (barWidth <= 0) return null
+
+                              const color     = getPlatformColor(res.platform)
+                              const guestName = `${res.guest_first_name || ''} ${res.guest_last_name || ''}`.trim()
+                              const ARROW = 10
+
+                              // Clip-path βέλη τύπου HostHub
+                              let clipPath = 'none'
+                              if (startsInView && endsInView) {
+                                clipPath = `polygon(${ARROW}px 0%, calc(100% - ${ARROW}px) 0%, 100% 50%, calc(100% - ${ARROW}px) 100%, ${ARROW}px 100%, 0% 50%)`
+                              } else if (startsInView) {
+                                clipPath = `polygon(${ARROW}px 0%, 100% 0%, 100% 100%, ${ARROW}px 100%, 0% 50%)`
+                              } else if (endsInView) {
+                                clipPath = `polygon(0% 0%, calc(100% - ${ARROW}px) 0%, 100% 50%, calc(100% - ${ARROW}px) 100%, 0% 100%)`
+                              }
 
                               return (
                                 <div
                                   key={res.id}
                                   onClick={() => openEdit(res)}
+                                  title={`${guestName} | IN: ${res.check_in_date} → OUT: ${res.check_out_date}`}
                                   style={{
                                     position: 'absolute',
-                                    left: startCol * 36 + gapLeft,
-                                    width: span * 36 - gapLeft - gapRight,
-                                    top: 5,
-                                    height: 32,
+                                    left: startCol * CELL,
+                                    width: Math.max(barWidth, CELL / 2),
+                                    top: 6,
+                                    height: 30,
                                     backgroundColor: color,
-                                    borderRadius,
+                                    clipPath,
                                     cursor: 'pointer',
-                                    overflow: 'hidden',
                                     zIndex: 5,
-                                    opacity: res.status === 'checked_in' ? 1 : 0.85,
+                                    opacity: res.status === 'checked_in' ? 1 : 0.82,
                                   }}
-                                  className="hover:brightness-110 transition-all flex items-center px-3 gap-1.5"
+                                  className="hover:brightness-110 transition-all"
                                 >
-                                  {res.status === 'checked_in' && (
-                                    <span className="text-white/80 text-xs flex-shrink-0">✓</span>
-                                  )}
-                                  <span className="text-white text-xs font-medium truncate" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.4)' }}>
-                                    {guestName || res.reservation_code}
+                                  <span
+                                    className="text-white text-xs font-medium truncate block select-none"
+                                    style={{
+                                      paddingLeft: startsInView ? ARROW + 6 : 6,
+                                      paddingRight: endsInView ? ARROW + 4 : 4,
+                                      lineHeight: '30px',
+                                      textShadow: '0 1px 2px rgba(0,0,0,0.5)',
+                                      overflow: 'hidden',
+                                      whiteSpace: 'nowrap',
+                                    }}
+                                  >
+                                    {res.status === 'checked_in' ? '✓ ' : ''}{guestName || res.reservation_code}
                                   </span>
                                 </div>
                               )

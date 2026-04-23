@@ -36,7 +36,7 @@ function buildEmailHtml(guest: any, room: any, reservation: any) {
 <body style="margin:0;padding:0;background:#0f0e0d;font-family:'Georgia',serif;color:#f5f0e8;">
 <div style="max-width:560px;margin:0 auto;padding:20px;">
   <div style="text-align:center;padding:40px 0 30px;border-bottom:1px solid #3d3935;">
-    <img src="https://checkin.webrya.com/logo-tower15-email.png" alt="Tower 15 Suites" width="80" height="80" style="display:block;margin:0 auto;border-radius:8px;" />
+    <img src="https://checkin.webrya.com/logo-tower15suites.png" alt="Tower 15 Suites" width="80" height="80" style="display:block;margin:0 auto;border-radius:8px;" />
     <h1 style="font-size:28px;font-weight:300;color:#f5f0e8;margin:16px 0 4px;">Tower 15 Suites</h1>
     <p style="color:#6b6460;font-size:13px;margin:0;font-family:sans-serif;text-transform:uppercase;letter-spacing:0.1em;">Κωδικοί Πρόσβασης</p>
   </div>
