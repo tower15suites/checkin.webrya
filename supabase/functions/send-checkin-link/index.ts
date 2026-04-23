@@ -170,7 +170,6 @@ function emailWrapper(content: string): string {
   <div style="text-align:center;padding-top:28px;border-top:1px solid #2d2b29;margin-top:32px;">
     <p style="font-family:sans-serif;font-size:12px;color:#4a4744;margin:0 0 4px;">Tower 15 Suites · Ιωάννου Φαρμάκη 15, Θεσσαλονίκη 546 29</p>
     <p style="font-family:sans-serif;font-size:11px;color:#3d3a38;margin:4px 0;">
-      <a href="https://tower15suites.gr" style="color:#6b5c4a;text-decoration:none;">tower15suites.gr</a>
       &nbsp;·&nbsp;
       <a href="tel:+306949655349" style="color:#6b5c4a;text-decoration:none;">+30 6949655349</a>
       &nbsp;·&nbsp;
