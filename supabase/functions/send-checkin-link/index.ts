@@ -11,9 +11,12 @@ const supabase = createClient(
 )
 
 // ── Εκτίμηση γλώσσας από όνομα ───────────────────────────────────────────────
+// Ελληνικοί χαρακτήρες ή γνωστά ελληνικά ονόματα → ελληνικά
 function detectLanguage(firstName: string, lastName: string): 'el' | 'en' {
   const name = `${firstName} ${lastName}`.toLowerCase()
+  // Ελληνικοί χαρακτήρες
   if (/[α-ωάέήίόύώϊϋΐΰ]/.test(name)) return 'el'
+  // Γνωστά ελληνικά ονόματα σε λατινικούς χαρακτήρες
   const greekNames = [
     'alexandros','alex','nikos','nikolaos','giorgos','georgios','george','dimitris','dimitrios',
     'kostas','konstantinos','yannis','ioannis','john','petros','stavros','apostolos','apostolis',
@@ -55,12 +58,12 @@ function buildEmail(reservation: any, checkinUrl: string): { subject: string; ht
 
   if (isGreek) {
     return {
-      subject: `Επιβεβαίωση Κράτησης — Tower 15 Suites`,
+      subject: `Επιβεβαίωση Κράτησης & Online Check-In — Tower 15 Suites`,
       html: buildGreekEmail(guestName, checkInFormatted, checkOutFormatted, checkinUrl, reservation.reservation_code),
     }
   } else {
     return {
-      subject: `Booking Confirmation — Tower 15 Suites`,
+      subject: `Booking Confirmation & Online Check-In — Tower 15 Suites`,
       html: buildEnglishEmail(guestName, checkInFormatted, checkOutFormatted, checkinUrl, reservation.reservation_code),
     }
   }
@@ -148,52 +151,91 @@ function buildGreekEmail(guestName: string, checkIn: string, checkOut: string, u
   </div>`)
 }
 
+
+
 function buildEnglishEmail(guestName: string, checkIn: string, checkOut: string, url: string, resCode: string): string {
   return emailWrapper(`
+  <!-- Greeting -->
   <div style="padding:32px 0 8px;">
-    <p style="font-size:18px;color:#d4bc98;margin:0 0 6px;font-weight:300;">Hello ${guestName},</p>
-    <p style="font-size:14px;color:#8a7f78;line-height:1.7;margin:0;font-family:sans-serif;">
-      Thank you for your booking! We are looking forward to welcoming you to Thessaloniki.
+    <p style="font-size:18px;color:#d4bc98;margin:0 0 6px;font-weight:300;">Dear ${guestName},</p>
+    <p style="font-size:14px;color:#8a7f78;line-height:1.9;margin:0;font-family:sans-serif;">
+      Thank you for choosing <strong style="color:#c09a68;">Tower 15 Suites</strong> for your upcoming stay! We look forward to welcoming you.
     </p>
   </div>
 
-  <table width="100%" cellspacing="0" cellpadding="0" style="margin:20px 0;">
-    <tr>
-      <td width="48%" style="background:#1a1816; border:1px solid #3d3935; padding:16px; text-align:center;">
-        <div style="font-family:sans-serif;font-size:10px;color:#6b6460;text-transform:uppercase;letter-spacing:0.12em;">Check-in</div>
-        <div style="font-family:sans-serif;font-size:13px;color:#f5f0e8;margin-top:5px;">${checkIn}</div>
-        <div style="font-size:11px;color:#8B5E2A;margin-top:5px;">from 15:00</div>
-      </td>
-      <td width="4%"></td>
-      <td width="48%" style="background:#1a1816; border:1px solid #3d3935; padding:16px; text-align:center;">
-        <div style="font-family:sans-serif;font-size:10px;color:#6b6460;text-transform:uppercase;letter-spacing:0.12em;">Check-out</div>
-        <div style="font-family:sans-serif;font-size:13px;color:#f5f0e8;margin-top:5px;">${checkOut}</div>
-        <div style="font-size:11px;color:#8B5E2A;margin-top:5px;">by 11:00</div>
-      </td>
-    </tr>
-  </table>
+  <!-- Dates -->
+  <div style="display:flex;gap:12px;margin:20px 0;">
+    <div style="flex:1;background:#1a1816;border:1px solid #3d3935;padding:16px;text-align:center;">
+      <div style="font-family:sans-serif;font-size:10px;color:#6b6460;text-transform:uppercase;letter-spacing:0.12em;margin-bottom:6px;">Check-in</div>
+      <div style="font-family:sans-serif;font-size:13px;color:#f5f0e8;line-height:1.4;">${checkIn}</div>
+      <div style="font-family:monospace;font-size:12px;color:#8B5E2A;margin-top:5px;font-weight:bold;">from 15:00</div>
+    </div>
+    <div style="flex:1;background:#1a1816;border:1px solid #3d3935;padding:16px;text-align:center;">
+      <div style="font-family:sans-serif;font-size:10px;color:#6b6460;text-transform:uppercase;letter-spacing:0.12em;margin-bottom:6px;">Check-out</div>
+      <div style="font-family:sans-serif;font-size:13px;color:#f5f0e8;line-height:1.4;">${checkOut}</div>
+      <div style="font-family:monospace;font-size:12px;color:#8B5E2A;margin-top:5px;font-weight:bold;">by 11:00</div>
+    </div>
+  </div>
 
-  <div style="margin-bottom:20px;">
-    <p style="font-family:sans-serif;font-size:14px;color:#8a7f78;line-height:1.8;">
-      Please complete the <strong>online check-in</strong> to automatically receive your access codes on your arrival day.
+  <!-- Address -->
+  <div style="background:#1a1816;border:1px solid #2d2b29;padding:14px 18px;margin-bottom:24px;display:flex;align-items:center;gap:12px;">
+    <span style="font-size:20px;">📍</span>
+    <div>
+      <div style="font-family:sans-serif;font-size:11px;color:#6b6460;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:3px;">Address</div>
+      <div style="font-family:sans-serif;font-size:13px;color:#d4bc98;">Ioannou Farmaki 15, Thessaloniki 546 29</div>
+    </div>
+  </div>
+
+  <!-- Divider -->
+  <div style="border-top:1px solid #3d3935;margin:24px 0;"></div>
+
+  <!-- Check-in CTA -->
+  <div style="margin-bottom:8px;">
+    <p style="font-family:sans-serif;font-size:14px;color:#8a7f78;line-height:1.9;margin:0 0 16px;">
+      To make your arrival as smooth as possible, please complete your <strong style="color:#c09a68;">online check-in</strong> before you arrive. Once completed, you will automatically receive your <strong style="color:#c09a68;">access codes</strong> (keylocker &amp; WiFi) by email at <strong style="color:#c09a68;">14:00</strong> on your arrival day.
     </p>
   </div>
 
-  <div style="text-align:center;padding:10px 0 30px;">
-    <a href="${url}" style="display:inline-block;background:#8B5E2A;color:#ffffff;text-decoration:none;padding:16px 30px;font-family:sans-serif;font-size:13px;letter-spacing:0.1em;text-transform:uppercase;font-weight:600;border-radius:4px;">
-      COMPLETE CHECK-IN
+  <!-- CTA Button -->
+  <div style="text-align:center;padding:20px 0 24px;">
+    <a href="${url}" style="display:inline-block;background:#8B5E2A;color:white;text-decoration:none;padding:15px 44px;font-family:sans-serif;font-size:14px;letter-spacing:0.08em;text-transform:uppercase;font-weight:600;">
+      Start Online Check-In →
     </a>
-  </div>
-
-  <div style="background:#1a1410;border:1px solid #3d2e1e;padding:15px;margin-bottom:20px;">
-    <p style="font-family:sans-serif;font-size:12px;color:#8a7060;margin:0;line-height:1.6;">
-      🪪 You will need: Your ID card or Passport.
+    <p style="font-family:sans-serif;font-size:11px;color:#4a4744;margin:12px 0 0;">
+      Or copy the link: <span style="color:#8a7f78;word-break:break-all;">${url}</span>
     </p>
   </div>
 
-  <div style="padding:10px; border-top:1px solid #2d2b29;">
-    <p style="font-family:sans-serif;font-size:11px;color:#6b6460;margin:0;">
-      Reservation Code: <strong style="color:#c09a68;">${resCode}</strong>
+  <!-- Security notice -->
+  <div style="background:#1a1410;border:1px solid #3d2e1e;padding:14px 18px;margin-bottom:24px;">
+    <p style="font-family:sans-serif;font-size:12px;color:#8a7060;margin:0;line-height:1.8;">
+      ⚠️ <strong style="color:#c09a68;">Security notice:</strong> This link is official and secure. It belongs exclusively to Tower 15 Suites and is NOT a phishing attempt. The process is fully legal and required under Greek short-term rental regulations.
+    </p>
+  </div>
+
+  <!-- What you need -->
+  <div style="background:#1a1816;border:1px solid #2d2b29;padding:20px 24px;margin-bottom:24px;">
+    <div style="font-family:sans-serif;font-size:10px;color:#6b6460;text-transform:uppercase;letter-spacing:0.12em;margin-bottom:14px;">What you will need</div>
+    <div style="font-family:sans-serif;font-size:13px;color:#8a7f78;line-height:2.0;">
+      🪪 &nbsp;National ID card or passport<br>
+      📧 &nbsp;Email address to receive your access codes<br>
+      ⏱️ &nbsp;Only takes 2–3 minutes
+    </div>
+  </div>
+
+  <!-- Reservation code -->
+  <div style="background:#1a1816;border:1px solid #2d2b29;padding:12px 18px;margin-bottom:24px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <span style="font-family:sans-serif;font-size:11px;color:#6b6460;text-transform:uppercase;letter-spacing:0.1em;">Reservation Number</span>
+      <span style="font-family:monospace;font-size:15px;color:#c09a68;font-weight:bold;">${resCode}</span>
+    </div>
+  </div>
+
+  <!-- Prefer not to use link -->
+  <div style="padding:0 4px;margin-bottom:8px;">
+    <p style="font-family:sans-serif;font-size:12px;color:#6b6460;line-height:1.8;margin:0;">
+      If you prefer not to use the link, please contact us directly and we will be happy to assist you.<br>
+      📞 <a href="tel:+306949655349" style="color:#c09a68;text-decoration:none;font-weight:bold;">+30 6949655349</a>
     </p>
   </div>`)
 }
@@ -240,6 +282,7 @@ Deno.serve(async (req) => {
     let reservations: any[] = []
 
     if (body.reservationId) {
+      // Single mode: κλήθηκε από sync-hosthub για νέα κράτηση
       const { data, error } = await supabase
         .from('reservations')
         .select('*')
@@ -253,6 +296,7 @@ Deno.serve(async (req) => {
       }
       reservations = [data]
     } else {
+      // Batch/cron mode: fallback για κρατήσεις που δεν έλαβαν link
       const targetDate = new Date()
       targetDate.setDate(targetDate.getDate() + 2)
       const target = targetDate.toISOString().split('T')[0]
