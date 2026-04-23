@@ -173,7 +173,6 @@ function emailWrapper(content: string): string {
       &nbsp;·&nbsp;
       <a href="tel:+306949655349" style="color:#6b5c4a;text-decoration:none;">+30 6949655349</a>
       &nbsp;·&nbsp;
-      <a href="mailto:info@tower15suites.gr" style="color:#6b5c4a;text-decoration:none;">info@tower15suites.gr</a>
     </p>
     <p style="font-family:sans-serif;font-size:10px;color:#2e2c2a;margin:8px 0 0;letter-spacing:0.05em;">
       Designed &amp; Developed by <a href="https://webrya.com" style="color:#4a3f35;text-decoration:none;font-weight:bold;">Webrya</a>
