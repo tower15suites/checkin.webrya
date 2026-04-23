@@ -231,6 +231,24 @@ export default function AdminDashboard() {
     setTimeout(() => setMsg(''), 5000)
   }
 
+  async function sendCheckinLink(reservationId) {
+    setMsg('Αποστολή check-in link...')
+    try {
+      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-checkin-link`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ reservationId }),
+      })
+      const data = await res.json()
+      setMsg(data.message || data.error || '✓ Link στάλθηκε!')
+      await loadAll()
+    } catch { setMsg('✗ Σφάλμα αποστολής') }
+    setTimeout(() => setMsg(''), 5000)
+  }
+
   async function deleteCheckin(id) {
     if (!confirm('Διαγραφή check-in; Είστε σίγουροι;')) return
     const { error } = await supabase.from('guest_checkins').delete().eq('id', id)
@@ -1025,6 +1043,10 @@ export default function AdminDashboard() {
                   setTimeout(() => setMsg(''), 2000)
                 }} className="btn-ghost flex-1 text-xs py-2.5">
                   🔗 Copy Check-in Link
+                </button>
+                <button onClick={() => sendCheckinLink(selectedRes.id)}
+                  className="btn-ghost flex-1 text-xs py-2.5 border-sky-800 text-sky-300 hover:text-sky-100">
+                  📨 {selectedRes.checkin_link_sent ? 'Ξαναστείλε Link' : 'Στείλε Link'}
                 </button>
               </div>
 

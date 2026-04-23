@@ -154,10 +154,11 @@ Deno.serve(async (req) => {
           // ── Στείλε check-in link αμέσως αν:
           //    α) Νέα κράτηση ΚΑΙ έχει email ΚΑΙ check_in > σήμερα
           //    β) Υπάρχουσα κράτηση που μόλις απέκτησε email (δεν είχε πριν)
+          // FIX: >= today για να στέλνει και σε κρατήσεις με check_in σήμερα
           const needsLink = upserted &&
             !upserted.checkin_link_sent &&
             guestEmail &&
-            b.date_from > today &&
+            b.date_from >= today &&
             (isNew || (!ex?.guest_email && guestEmail))
 
           if (needsLink) {
