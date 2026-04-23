@@ -81,7 +81,7 @@ function emailWrapper(content: string): string {
 
   <!-- Header -->
   <div style="text-align:center;padding:40px 0 30px;border-bottom:1px solid #3d3935;">
-    <div style="display:inline-block;background:#8B5E2A;width:52px;height:52px;line-height:52px;text-align:center;font-family:monospace;font-weight:bold;color:white;font-size:15px;letter-spacing:1px;">T15</div>
+    <img src="https://checkin.webrya.com/logo-tower15-email.png" alt="Tower 15 Suites" width="80" height="80" style="display:block;margin:0 auto;border-radius:8px;" />
     <h1 style="font-size:26px;font-weight:300;color:#f5f0e8;margin:14px 0 4px;letter-spacing:0.05em;">Tower 15 Suites</h1>
     <p style="color:#6b6460;font-size:12px;margin:0;font-family:sans-serif;text-transform:uppercase;letter-spacing:0.12em;">Thessaloniki, Greece</p>
   </div>
