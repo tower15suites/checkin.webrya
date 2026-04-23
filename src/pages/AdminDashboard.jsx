@@ -29,7 +29,6 @@ function addDays(date, days) {
   return d
 }
 
-// FIX: χρησιμοποιούμε local time παντού — toISOString() επιστρέφει UTC και χάνεται μέρα σε UTC+3
 function formatDate(d) {
   const y = d.getFullYear()
   const m = String(d.getMonth() + 1).padStart(2, '0')
@@ -38,8 +37,15 @@ function formatDate(d) {
 }
 
 function parseDate(str) {
-  // T12:00:00 αντί για T00:00:00 για να αποφύγουμε DST edge cases
   return new Date(str + 'T12:00:00')
+}
+
+// FIX: υπολογισμός διαφοράς ημερών χωρίς floating point / DST προβλήματα
+function daysDiff(dateA, dateB) {
+  const msPerDay = 24 * 60 * 60 * 1000
+  const utcA = Date.UTC(dateA.getFullYear(), dateA.getMonth(), dateA.getDate())
+  const utcB = Date.UTC(dateB.getFullYear(), dateB.getMonth(), dateB.getDate())
+  return Math.round((utcA - utcB) / msPerDay)
 }
 
 export default function AdminDashboard() {
@@ -150,8 +156,8 @@ export default function AdminDashboard() {
     const calEnd = addDays(startDate, totalDays)
     const visStart = resStart < startDate ? startDate : resStart
     const visEnd = resEnd > calEnd ? calEnd : resEnd
-    const startCol = Math.floor((visStart - startDate) / 86400000)
-    const span = Math.floor((visEnd - visStart) / 86400000)
+    const startCol = daysDiff(visStart, startDate)
+    const span = daysDiff(visEnd, visStart)
     return { startCol, span }
   }
 
@@ -526,10 +532,8 @@ export default function AdminDashboard() {
                               const visStart = resStart < calendarStart ? calendarStart : resStart
                               const visEnd   = resEnd   > calEnd        ? calEnd        : resEnd
 
-                              const startCol = Math.floor((visStart - calendarStart) / 86400000)
-
-                              // Αριθμός ημερών από check_in ως check_out (συμπεριλαμβάνει checkout day)
-                              const totalDays = Math.floor((visEnd - visStart) / 86400000)
+                              const startCol  = daysDiff(visStart, calendarStart)
+                              const totalDays = daysDiff(visEnd, visStart)
 
                               // FIX: η μύτη του δεξιού βέλους πατάει ΑΚΡΙΒΩΣ στη στήλη checkout
                               // δηλ. το bar καλύπτει totalDays * CELL και η μύτη φτάνει ως την αρχή της checkout στήλης
