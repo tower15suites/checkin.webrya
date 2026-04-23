@@ -29,12 +29,17 @@ function addDays(date, days) {
   return d
 }
 
+// FIX: χρησιμοποιούμε local time παντού — toISOString() επιστρέφει UTC και χάνεται μέρα σε UTC+3
 function formatDate(d) {
-  return d.toISOString().split('T')[0]
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
 }
 
 function parseDate(str) {
-  return new Date(str + 'T00:00:00')
+  // T12:00:00 αντί για T00:00:00 για να αποφύγουμε DST edge cases
+  return new Date(str + 'T12:00:00')
 }
 
 export default function AdminDashboard() {
@@ -117,7 +122,7 @@ export default function AdminDashboard() {
     setLoading(true)
     const [{ data: r }, { data: res }, { data: ci }] = await Promise.all([
       supabase.from('rooms').select('*').order('room_number'),
-      supabase.from('reservations').select('*, rooms(room_number,floor,wifi_ssid,wifi_password,door_code,keylocker_code)').gte('check_out_date', new Date().toISOString().split('T')[0]).order('check_in_date'),
+      supabase.from('reservations').select('*, rooms(room_number,floor,wifi_ssid,wifi_password,door_code,keylocker_code)').gte('check_out_date', formatDate(new Date())).order('check_in_date'),
       supabase.from('guest_checkins').select('*, reservations(reservation_code, rooms(room_number))').order('created_at', { ascending: false }).limit(50),
     ])
     setRooms(r || [])
@@ -257,7 +262,7 @@ export default function AdminDashboard() {
     setTimeout(() => setMsg(''), 2000)
   }
 
-  const today = new Date().toISOString().split('T')[0]
+  const today = formatDate(new Date())
   const todayArrivals   = reservations.filter(r => r.check_in_date === today)
   const todayCheckouts  = reservations.filter(r => r.check_out_date === today)
   const todayStaying    = reservations.filter(r => r.check_in_date < today && r.check_out_date > today)
