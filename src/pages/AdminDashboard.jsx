@@ -505,41 +505,72 @@ export default function AdminDashboard() {
                               )
                             })}
 
-                            {/* Reservation blocks - HostHub style με βέλη */}
+                            {/* Reservation blocks - HostHub style: εσοχή αριστερά (check-in), βέλος δεξιά (check-out) */}
                             {roomReservations.map(res => {
-                              const CELL = 36
+                              const CELL   = 36
+                              const ARROW  = 12  // βάθος βέλους/εσοχής σε px
+
                               const calStartStr = formatDate(calendarStart)
                               const calEndStr   = formatDate(addDays(calendarStart, DAYS_SHOWN))
                               const startsInView = res.check_in_date  >= calStartStr
                               const endsInView   = res.check_out_date <= calEndStr
 
-                              const resStart  = parseDate(res.check_in_date)
-                              const resEnd    = parseDate(res.check_out_date)
-                              const calEnd    = addDays(calendarStart, DAYS_SHOWN)
-                              const visStart  = resStart < calendarStart ? calendarStart : resStart
-                              const visEnd    = resEnd   > calEnd        ? calEnd        : resEnd
-                              const startCol  = Math.floor((visStart - calendarStart) / 86400000)
-                              const fullDays  = Math.floor((visEnd - visStart) / 86400000)
+                              const resStart = parseDate(res.check_in_date)
+                              const resEnd   = parseDate(res.check_out_date)
+                              const calEnd   = addDays(calendarStart, DAYS_SHOWN)
+                              const visStart = resStart < calendarStart ? calendarStart : resStart
+                              const visEnd   = resEnd   > calEnd        ? calEnd        : resEnd
 
-                              // Bar τελειώνει στο μισό της checkout μέρας (όπως HostHub)
-                              const barWidth  = endsInView
-                                ? fullDays * CELL + CELL / 2 - 2
-                                : fullDays * CELL
+                              const startCol = Math.floor((visStart - calendarStart) / 86400000)
+
+                              // Αριθμός ημερών από check_in ως check_out (συμπεριλαμβάνει checkout day)
+                              const totalDays = Math.floor((visEnd - visStart) / 86400000)
+
+                              // FIX: η μύτη του δεξιού βέλους πατάει ΑΚΡΙΒΩΣ στη στήλη checkout
+                              // δηλ. το bar καλύπτει totalDays * CELL και η μύτη φτάνει ως την αρχή της checkout στήλης
+                              const barWidth = endsInView
+                                ? totalDays * CELL          // τελειώνει ακριβώς στην αρχή της checkout στήλης
+                                : totalDays * CELL
 
                               if (barWidth <= 0) return null
 
                               const color     = getPlatformColor(res.platform)
                               const guestName = `${res.guest_first_name || ''} ${res.guest_last_name || ''}`.trim()
-                              const ARROW = 10
 
-                              // Clip-path βέλη τύπου HostHub
-                              let clipPath = 'none'
+                              // ── Clip-path ──────────────────────────────────
+                              // Αριστερά: εσοχή (◁) αν ξεκινά εδώ
+                              // Δεξιά:    βέλος (▷) αν τελειώνει εδώ
+                              let clipPath
                               if (startsInView && endsInView) {
-                                clipPath = `polygon(${ARROW}px 0%, calc(100% - ${ARROW}px) 0%, 100% 50%, calc(100% - ${ARROW}px) 100%, ${ARROW}px 100%, 0% 50%)`
+                                // εσοχή αριστερά + βέλος δεξιά
+                                clipPath = `polygon(
+                                  ${ARROW}px 0%,
+                                  calc(100% - ${ARROW}px) 0%,
+                                  100% 50%,
+                                  calc(100% - ${ARROW}px) 100%,
+                                  ${ARROW}px 100%,
+                                  0% 50%
+                                )`
                               } else if (startsInView) {
-                                clipPath = `polygon(${ARROW}px 0%, 100% 0%, 100% 100%, ${ARROW}px 100%, 0% 50%)`
+                                // εσοχή αριστερά, δεξιά κομμένο (συνεχίζεται)
+                                clipPath = `polygon(
+                                  ${ARROW}px 0%,
+                                  100% 0%,
+                                  100% 100%,
+                                  ${ARROW}px 100%,
+                                  0% 50%
+                                )`
                               } else if (endsInView) {
-                                clipPath = `polygon(0% 0%, calc(100% - ${ARROW}px) 0%, 100% 50%, calc(100% - ${ARROW}px) 100%, 0% 100%)`
+                                // αριστερά κομμένο, βέλος δεξιά
+                                clipPath = `polygon(
+                                  0% 0%,
+                                  calc(100% - ${ARROW}px) 0%,
+                                  100% 50%,
+                                  calc(100% - ${ARROW}px) 100%,
+                                  0% 100%
+                                )`
+                              } else {
+                                clipPath = 'none'
                               }
 
                               return (
@@ -550,7 +581,7 @@ export default function AdminDashboard() {
                                   style={{
                                     position: 'absolute',
                                     left: startCol * CELL,
-                                    width: Math.max(barWidth, CELL / 2),
+                                    width: Math.max(barWidth, CELL),
                                     top: 6,
                                     height: 30,
                                     backgroundColor: color,
@@ -564,8 +595,8 @@ export default function AdminDashboard() {
                                   <span
                                     className="text-white text-xs font-medium truncate block select-none"
                                     style={{
-                                      paddingLeft: startsInView ? ARROW + 6 : 6,
-                                      paddingRight: endsInView ? ARROW + 4 : 4,
+                                      paddingLeft:  startsInView ? ARROW + 8 : 8,
+                                      paddingRight: endsInView   ? ARROW + 6 : 6,
                                       lineHeight: '30px',
                                       textShadow: '0 1px 2px rgba(0,0,0,0.5)',
                                       overflow: 'hidden',
