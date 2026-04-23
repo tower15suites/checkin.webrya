@@ -50,8 +50,8 @@ function buildCheckoutEmail(guest: any, room: any, reservation: any) {
   <!-- Checkout time highlight -->
   <div style="background:#1a1816;border:1px solid #3d3935;padding:32px;margin:8px 0 24px;text-align:center;">
     <div style="font-family:sans-serif;font-size:11px;color:#6b6460;text-transform:uppercase;letter-spacing:0.12em;margin-bottom:12px;">Ώρα Αναχώρησης</div>
-    <div style="font-family:monospace;font-size:52px;color:#f5f0e8;font-weight:bold;line-height:1;">11:30</div>
-    <div style="font-family:sans-serif;font-size:12px;color:#8a7f78;margin-top:8px;">Παρακαλούμε αποχωρήστε έως τις 11:30</div>
+    <div style="font-family:monospace;font-size:52px;color:#f5f0e8;font-weight:bold;line-height:1;">11:00</div>
+    <div style="font-family:sans-serif;font-size:12px;color:#8a7f78;margin-top:8px;">Παρακαλούμε αποχωρήστε έως τις 11:00</div>
   </div>
 
   <!-- Checkout instructions -->
@@ -150,7 +150,7 @@ Deno.serve(async (req) => {
 
         await sendEmail(
           email,
-          `🏨 Καλή Αναχώρηση — Check-out έως 11:30 | Tower 15 Suites`,
+          `🏨 Καλή Αναχώρηση — Check-out έως 11:00 | Tower 15 Suites`,
           buildCheckoutEmail(guestData, reservation.rooms, reservation)
         )
 

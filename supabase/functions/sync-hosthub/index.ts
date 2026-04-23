@@ -58,10 +58,10 @@ Deno.serve(async (req) => {
     const now   = new Date()
     const today = now.toISOString().split('T')[0]
 
-    // 11:30 Athens = UTC+3 → 08:30 UTC
+    // 11:00 Athens = UTC+3 → 08:00 UTC
     const utcHour = now.getUTCHours()
     const utcMin  = now.getUTCMinutes()
-    const afterCheckout = utcHour > 8 || (utcHour === 8 && utcMin >= 30)
+    const afterCheckout = utcHour > 8 || (utcHour === 8)
     console.log(`Sync start | today=${today} | UTC=${utcHour}:${String(utcMin).padStart(2,'0')} | afterCheckout=${afterCheckout}`)
 
     // ── Step 1: Existing reservations για preservation ────────────────────────

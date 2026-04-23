@@ -79,7 +79,7 @@ function buildEmailHtml(guest: any, room: any, reservation: any) {
     <div style="flex:1;background:#1a1816;border:1px solid #2d2b29;padding:16px;text-align:center;">
       <div style="font-family:sans-serif;font-size:10px;color:#6b6460;text-transform:uppercase;margin-bottom:6px;">Check-out</div>
       <div style="font-family:sans-serif;font-size:13px;color:#f5f0e8;">${checkOutFormatted}</div>
-      <div style="font-family:monospace;font-size:11px;color:#8B5E2A;margin-top:4px;">έως 11:30</div>
+      <div style="font-family:monospace;font-size:11px;color:#8B5E2A;margin-top:4px;">έως 11:00</div>
     </div>
   </div>
   <div style="background:#1a1816;border:1px solid #2d2b29;padding:16px;margin-bottom:28px;text-align:center;">

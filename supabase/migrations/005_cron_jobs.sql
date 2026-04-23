@@ -30,8 +30,8 @@ CREATE TABLE IF NOT EXISTS app_cron_settings (
 
 -- ΣΗΜΑΝΤΙΚΟ: Αντικατάστησε https://xxxx.supabase.co και το anon key
 INSERT INTO app_cron_settings (key, value) VALUES
-  ('supabase_url',      'https://fbknscgkjdsxnaugyzaq.supabase.co'),
-  ('supabase_anon_key', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZia25zY2dramRzeG5hdWd5emFxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU3NzI0NDYsImV4cCI6MjA5MTM0ODQ0Nn0.J-tNm4ndoJcdxdava201YHMDHqGwAPYdepgLhQyXTuo')
+  ('supabase_url',      'https://YOUR_PROJECT_REF.supabase.co'),
+  ('supabase_anon_key', 'YOUR_ANON_KEY_HERE')
 ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
 
 -- ============================================================
