@@ -71,6 +71,10 @@ export default function AdminDashboard() {
   const [showSecrets, setShowSecrets] = useState({})
   const [actionResult, setActionResult] = useState('')
   const [actionLoading, setActionLoading] = useState('')
+  const [showPast, setShowPast] = useState(false)
+  const [pastReservations, setPastReservations] = useState([])
+  const [pastLoading, setPastLoading] = useState(false)
+  const [bulkDeleteLoading, setBulkDeleteLoading] = useState(false)
 
   const DAYS_SHOWN = 30
 
@@ -137,7 +141,68 @@ export default function AdminDashboard() {
     setLoading(false)
   }
 
-  // ── Calendar helpers ────────────────────────────────────────
+  async function loadPastReservations() {
+    setPastLoading(true)
+    const yesterday = new Date()
+    yesterday.setDate(yesterday.getDate() - 1)
+    const { data } = await supabase
+      .from('reservations')
+      .select('*, rooms(room_number)')
+      .lt('check_out_date', formatDate(new Date()))
+      .order('check_out_date', { ascending: false })
+      .limit(100)
+    setPastReservations(data || [])
+    setPastLoading(false)
+  }
+
+  async function deletePastReservation(id) {
+    await supabase.from('guest_checkins').delete().eq('reservation_id', id)
+    const { error } = await supabase.from('reservations').delete().eq('id', id)
+    if (!error) {
+      setPastReservations(rs => rs.filter(r => r.id !== id))
+      setMsg('✓ Κράτηση διαγράφηκε')
+      setTimeout(() => setMsg(''), 2000)
+    }
+  }
+
+  async function bulkDeleteCompleted() {
+    if (!confirm('Διαγραφή ΟΛΩΝ των ολοκληρωμένων κρατήσεων; Η ενέργεια είναι μόνιμη.')) return
+    setBulkDeleteLoading(true)
+    const ids = pastReservations.map(r => r.id)
+    for (const id of ids) {
+      await supabase.from('guest_checkins').delete().eq('reservation_id', id)
+      await supabase.from('reservations').delete().eq('id', id)
+    }
+    setPastReservations([])
+    setMsg(`✓ Διαγράφηκαν ${ids.length} κρατήσεις`)
+    setBulkDeleteLoading(false)
+    setTimeout(() => setMsg(''), 3000)
+  }
+
+  // ── Multi-room: find all reservations with same reservation_code ────────────
+  function getSiblingReservations(res) {
+    return reservations.filter(r => r.reservation_code === res.reservation_code && r.id !== res.id)
+  }
+
+  async function sendCheckinLinkToAllRooms(reservationCode) {
+    const siblings = reservations.filter(r => r.reservation_code === reservationCode)
+    setMsg(`Αποστολή σε ${siblings.length} δωμάτια...`)
+    let sent = 0
+    for (const r of siblings) {
+      try {
+        const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-checkin-link`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ reservationId: r.id, force: true }),
+        })
+        const data = await res.json()
+        if (!data.error) sent++
+      } catch (e) { console.warn('send-checkin-link error:', e) }
+    }
+    setMsg(`✓ Εστάλησαν σε ${sent}/${siblings.length} δωμάτια`)
+    await loadAll()
+    setTimeout(() => setMsg(''), 5000)
+  }
   const calDays = Array.from({ length: DAYS_SHOWN }, (_, i) => addDays(calendarStart, i))
 
   function getReservationForRoomDay(roomNumber, date) {
@@ -665,6 +730,8 @@ export default function AdminDashboard() {
             {/* ══ RESERVATIONS TAB ══ */}
             {tab === 2 && (
               <div className="max-w-2xl mx-auto p-4 space-y-3">
+
+                {/* Header */}
                 <div className="flex items-center justify-between mb-2">
                   <h2 className="font-display text-xl text-white">Κρατήσεις</h2>
                   <button onClick={syncHosthub} disabled={syncLoading}
@@ -672,12 +739,107 @@ export default function AdminDashboard() {
                     {syncLoading ? '⟳ Sync...' : '⟳ Sync Hosthub'}
                   </button>
                 </div>
-                {reservations.map(res => (
-                  <ReservationCard key={res.id} reservation={res}
-                    onEdit={() => openEdit(res)}
-                    onSendCodes={() => sendCodes(res.id, res.guest_checkins?.length === 0)}
-                  />
-                ))}
+
+                {/* Active reservations — group by reservation_code for multi-room */}
+                {(() => {
+                  // Group reservations by code (για multi-room κρατήσεις)
+                  const groups = {}
+                  reservations.forEach(res => {
+                    const key = res.reservation_code
+                    if (!groups[key]) groups[key] = []
+                    groups[key].push(res)
+                  })
+                  return Object.entries(groups).map(([code, rooms]) => {
+                    const isMulti = rooms.length > 1
+                    return (
+                      <div key={code}>
+                        {/* Multi-room banner */}
+                        {isMulti && (
+                          <div className="mb-1 px-3 py-2 bg-amber-900/20 border border-amber-700/40 rounded flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <span className="text-amber-400 text-xs font-mono font-bold">🏨 {rooms.length} ΔΩΜΑΤΙΑ</span>
+                              <span className="text-stone-500 text-xs font-mono">{code}</span>
+                            </div>
+                            <button
+                              onClick={() => sendCheckinLinkToAllRooms(code)}
+                              className="text-xs px-3 py-1 bg-amber-900/40 hover:bg-amber-800/60 text-amber-300 border border-amber-700/50 transition-colors"
+                            >
+                              📧 Email σε όλα
+                            </button>
+                          </div>
+                        )}
+                        {rooms.map(res => (
+                          <div key={res.id} className={isMulti ? 'ml-3 border-l border-amber-800/30 pl-2 mb-1' : 'mb-3'}>
+                            <ReservationCard reservation={res}
+                              onEdit={() => openEdit(res)}
+                              onSendCodes={() => sendCodes(res.id, res.guest_checkins?.length === 0)}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    )
+                  })
+                })()}
+
+                {/* ── Ολοκληρωμένες κρατήσεις (#7) ── */}
+                <div className="pt-4 border-t border-stone-800">
+                  <div className="flex items-center justify-between mb-3">
+                    <button
+                      onClick={async () => {
+                        setShowPast(p => !p)
+                        if (!showPast && pastReservations.length === 0) await loadPastReservations()
+                      }}
+                      className="flex items-center gap-2 text-stone-400 hover:text-stone-200 text-sm transition-colors"
+                    >
+                      <span>{showPast ? '▼' : '▶'}</span>
+                      <span>Ολοκληρωμένες κρατήσεις ({pastReservations.length || '...'})</span>
+                    </button>
+                    {showPast && pastReservations.length > 0 && (
+                      <button
+                        onClick={bulkDeleteCompleted}
+                        disabled={bulkDeleteLoading}
+                        className="text-xs px-3 py-1.5 text-red-400 border border-red-800/50 hover:bg-red-900/20 transition-colors"
+                      >
+                        {bulkDeleteLoading ? '...' : `🗑️ Διαγραφή όλων (${pastReservations.length})`}
+                      </button>
+                    )}
+                  </div>
+
+                  {showPast && (
+                    <div className="space-y-2">
+                      {pastLoading ? (
+                        <div className="text-stone-500 text-sm text-center py-4">Φόρτωση...</div>
+                      ) : pastReservations.length === 0 ? (
+                        <div className="text-stone-600 text-sm text-center py-4">Δεν υπάρχουν ολοκληρωμένες κρατήσεις</div>
+                      ) : (
+                        pastReservations.map(res => (
+                          <div key={res.id} className="card opacity-60 hover:opacity-80 transition-opacity">
+                            <div className="flex items-start justify-between">
+                              <div>
+                                <div className="font-mono text-stone-300 text-sm">{res.reservation_code}</div>
+                                <div className="text-stone-500 text-xs mt-0.5">{res.guest_first_name} {res.guest_last_name}</div>
+                                {res.rooms && <div className="text-stone-600 text-xs font-mono">Δωμ. {res.rooms.room_number}</div>}
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <div className="text-right">
+                                  <div className="text-xs text-stone-600">{res.check_in_date}</div>
+                                  <div className="text-xs text-stone-600">→ {res.check_out_date}</div>
+                                  <div className="text-xs font-mono mt-1 text-stone-500">{(res.platform || '').toUpperCase()}</div>
+                                </div>
+                                <button
+                                  onClick={() => deletePastReservation(res.id)}
+                                  className="text-stone-600 hover:text-red-400 text-lg leading-none transition-colors ml-2"
+                                  title="Διαγραφή"
+                                >×</button>
+                              </div>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  )}
+                </div>
+
               </div>
             )}
 

@@ -1,6 +1,8 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const RESEND_API_KEY     = Deno.env.get('RESEND_API_KEY')!
+const HOSTHUB_API_KEY    = Deno.env.get('HOSTHUB_API_KEY')!
+const HOSTHUB_BASE       = 'https://app.hosthub.com/api/2019-03-01'
 const FROM_EMAIL         = 'info@tower15suites.gr'
 const FROM_NAME          = 'Tower 15 Suites'
 const CHECKIN_PORTAL_URL = Deno.env.get('CHECKIN_PORTAL_URL') || 'https://checkin.tower15suites.gr'
@@ -10,11 +12,11 @@ const supabase = createClient(
   Deno.env.get('SERVICE_ROLE_KEY')!
 )
 
-// ── Εκτίμηση γλώσσας από όνομα ───────────────────────────────────────────────
+// ── Language detection from guest name ───────────────────────
 function detectLanguage(firstName: string, lastName: string): 'el' | 'en' {
   const name = `${firstName} ${lastName}`.toLowerCase()
   if (/[α-ωάέήίόύώϊϋΐΰ]/.test(name)) return 'el'
-  const greekNames = [
+  const greekFirstNames = new Set([
     'alexandros','alex','nikos','nikolaos','giorgos','georgios','george','dimitris','dimitrios',
     'kostas','konstantinos','yannis','ioannis','john','petros','stavros','apostolos','apostolis',
     'michalis','michael','vasilis','vasileios','panagiotis','panagis','thanasis','athanasios',
@@ -23,58 +25,51 @@ function detectLanguage(firstName: string, lastName: string): 'el' | 'en' {
     'evangelia','evangelos','stavroula','despina','fotini','theodoros','theodore','thanos',
     'lefteris','eleftherios','manolis','emmanouel','stratos','efstratios','giannis','tasos',
     'manos','makis','lakis','babis','kosmas','pavlos','paul','stelios','stylianos',
-    'kyriakos','kyriaki','panos','panagiotis','tolis','takis','vaggelis','vangelis',
-    'evangelos','zoe','zoi','dimos','dhmhtrios','theofilos','arsenios','filippos','philip',
-    'marios','mario','nektarios','charalampos','haris','harris','fotis','fotios',
+    'kyriakos','kyriaki','panos','takis','vaggelis','vangelis','zoe','zoi',
+    'dimos','theofilos','arsenios','filippos','philip','marios','nektarios',
+    'charalampos','haris','harris','fotis','fotios',
+  ])
+  const greekLastNames = new Set([
     'koulouris','papadopoulos','papageorgiou','nikolaidis','georgiou','alexandrou',
     'karamanlis','stefanidis','dimitriou','konstantinidis','papadimitriou','kougioumtzi',
-    'michaloglou','stamos','stanojevic','karagianni','bervinova'
-  ]
+    'michaloglou','stamos','karagianni','bervinova','papaioannou','vasileiou',
+    'christodoulou','oikonomou','makris','antonopoulos','stavropoulos','tsakiris',
+    'petrou','andreou','theodorou','ioannou',
+  ])
   const parts = name.split(/\s+/)
-  return parts.some(p => greekNames.includes(p)) ? 'el' : 'en'
+  if (parts.some(p => greekFirstNames.has(p) || greekLastNames.has(p))) return 'el'
+  return 'en'
 }
 
-// ── Plain text για Resend (εμφανίζεται στο Hosthub/Booking.com Inbox) ─────────
-// Καθαρό, δομημένο, χωρίς HTML — αυτό βλέπει ο επισκέπτης στη συνομιλία
-function buildPlainText(reservation: any, checkinUrl: string, lang: 'el' | 'en'): string {
-  const firstName     = reservation.guest_first_name || ''
-  const checkInDate   = new Date(reservation.check_in_date)
-  const checkOutDate  = new Date(reservation.check_out_date)
-
-  const checkInFormatted  = checkInDate.toLocaleDateString(lang === 'el' ? 'el-GR' : 'en-GB', {
-    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
-  })
-  const checkOutFormatted = checkOutDate.toLocaleDateString(lang === 'el' ? 'el-GR' : 'en-GB', {
-    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
-  })
+// ── Platform message (plain text, NO link — platforms strip external URLs) ─
+function buildPlatformMessage(reservation: any, lang: 'el' | 'en'): string {
+  const firstName = reservation.guest_first_name || ''
+  const checkIn   = new Date(reservation.check_in_date)
+  const checkOut  = new Date(reservation.check_out_date)
+  const ciFmt     = checkIn.toLocaleDateString(lang === 'el' ? 'el-GR' : 'en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+  const coFmt     = checkOut.toLocaleDateString(lang === 'el' ? 'el-GR' : 'en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
 
   if (lang === 'el') {
     return `Αγαπητέ/ή ${firstName},
 
-Σας ευχαριστούμε που επιλέξατε το Tower 15 Suites για την επερχόμενη διαμονή σας!
+Σας ευχαριστούμε για την κράτησή σας στο Tower 15 Suites!
 
-📅 Check-in: ${checkInFormatted} από 15:00
-📅 Check-out: ${checkOutFormatted} έως 11:00
-📍 Διεύθυνση: Ιωάννου Φαρμάκη 15, Θεσσαλονίκη 546 29
+━━━━━━━━━━━━━━━━━━━━━━━
+📅 CHECK-IN:   ${ciFmt} από 15:00
+📅 CHECK-OUT:  ${coFmt} έως 11:00
+📍 ΔΙΕΥΘΥΝΣΗ: Ιωάννου Φαρμάκη 15, Θεσσαλονίκη 546 29
+━━━━━━━━━━━━━━━━━━━━━━━
 
-────────────────────────────
+📧 ONLINE CHECK-IN
 
-Παρακαλούμε ολοκληρώστε το online check-in πριν την άφιξή σας. Μόλις το ολοκληρώσετε, θα λάβετε αυτόματα τους κωδικούς εισόδου (keylocker & WiFi) στις 14:00 της ημέρας άφιξής σας.
+Σας έχουμε στείλει email στη διεύθυνση που δηλώσατε κατά την κράτηση με τον σύνδεσμο online check-in. Παρακαλούμε ελέγξτε τα εισερχόμενά σας (και τον φάκελο SPAM).
 
-🔗 Σύνδεσμος Check-In:
-${checkinUrl}
+Μόλις ολοκληρώσετε το online check-in, θα λάβετε αυτόματα στις 14:00 της ημέρας άφιξής σας τους κωδικούς εισόδου (keylocker & WiFi). Διαρκεί μόνο 2–3 λεπτά.
 
-Τι θα χρειαστείτε:
-• Αστυνομική ταυτότητα ή διαβατήριο
-• ΑΦΜ (μόνο για Έλληνες πολίτες)
-• Email για την αποστολή των κωδικών
-• Διαρκεί μόνο 2–3 λεπτά
+━━━━━━━━━━━━━━━━━━━━━━━
 
-Αριθμός Κράτησης: ${reservation.reservation_code}
+❓ Εάν δεν επιθυμείτε να ολοκληρώσετε το online check-in, απαντήστε σε αυτό το μήνυμα με τα στοιχεία σας (όνομα, επίθετο, αριθμό ταυτότητας ή διαβατηρίου) και θα σας εξυπηρετήσουμε άμεσα.
 
-⚠️ Σημείωση: Ο σύνδεσμος είναι επίσημος και ανήκει αποκλειστικά στο Tower 15 Suites. Η διαδικασία είναι νόμιμη και απαιτείται βάσει ελληνικής νομοθεσίας.
-
-Εάν δεν επιθυμείτε να χρησιμοποιήσετε τον σύνδεσμο, επικοινωνήστε μαζί μας:
 📞 +30 6949655349
 
 Ανυπομονούμε να σας υποδεχτούμε!
@@ -82,29 +77,24 @@ Tower 15 Suites`
   } else {
     return `Dear ${firstName},
 
-Thank you for choosing Tower 15 Suites for your upcoming stay!
+Thank you for choosing Tower 15 Suites!
 
-📅 Check-in: ${checkInFormatted} from 15:00
-📅 Check-out: ${checkOutFormatted} by 11:00
-📍 Address: Ioannou Farmaki 15, Thessaloniki 546 29
+━━━━━━━━━━━━━━━━━━━━━━━
+📅 CHECK-IN:   ${ciFmt} from 15:00
+📅 CHECK-OUT:  ${coFmt} by 11:00
+📍 ADDRESS:    Ioannou Farmaki 15, Thessaloniki 546 29
+━━━━━━━━━━━━━━━━━━━━━━━
 
-────────────────────────────
+📧 ONLINE CHECK-IN
 
-To make your arrival as smooth as possible, please complete your online check-in before you arrive. Once completed, you will automatically receive your access codes (keylocker & WiFi) by email at 14:00 on your arrival day.
+We have sent you an email with your online check-in link. Please check your inbox (and your SPAM folder).
 
-🔗 Check-In Link:
-${checkinUrl}
+Once you complete the online check-in, you will automatically receive your access codes (keylocker & WiFi) at 14:00 on your arrival day. It only takes 2–3 minutes.
 
-What you will need:
-• National ID card or passport
-• Email address to receive your access codes
-• Only takes 2–3 minutes
+━━━━━━━━━━━━━━━━━━━━━━━
 
-Reservation Number: ${reservation.reservation_code}
+❓ If you prefer not to complete the online check-in, simply reply to this message with your details (full name, ID or passport number) and we will assist you personally.
 
-⚠️ Security notice: This link is official and secure. It belongs exclusively to Tower 15 Suites and is NOT a phishing attempt. The process is fully legal and required under Greek short-term rental regulations.
-
-If you prefer not to use the link, please contact us directly:
 📞 +30 6949655349
 
 We look forward to welcoming you!
@@ -112,287 +102,196 @@ Tower 15 Suites`
   }
 }
 
-// ── HTML Email (σταλμένο μέσω Resend στον επισκέπτη) ──────────────────────────
-function buildEmail(reservation: any, checkinUrl: string): { subject: string; html: string; text: string } {
-  const firstName  = reservation.guest_first_name || ''
-  const lastName   = reservation.guest_last_name  || ''
-  const lang       = detectLanguage(firstName, lastName)
-  const isGreek    = lang === 'el'
-
-  const checkInDate  = new Date(reservation.check_in_date)
-  const checkOutDate = new Date(reservation.check_out_date)
-
-  const checkInFormatted  = checkInDate.toLocaleDateString(isGreek ? 'el-GR' : 'en-GB', {
-    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
-  })
-  const checkOutFormatted = checkOutDate.toLocaleDateString(isGreek ? 'el-GR' : 'en-GB', {
-    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
-  })
-
-  const guestName = firstName || (isGreek ? 'Επισκέπτη' : 'Guest')
-  const text = buildPlainText(reservation, checkinUrl, lang)
-
-  if (isGreek) {
-    return {
-      subject: `Επιβεβαίωση Κράτησης & Online Check-In — Tower 15 Suites`,
-      html: buildGreekEmail(guestName, checkInFormatted, checkOutFormatted, checkinUrl, reservation.reservation_code),
-      text,
+// ── Send via Hosthub Messages API (all platforms: Booking/Airbnb/Vrbo/etc.) ─
+async function sendPlatformMessage(hosthubBookingId: string, message: string): Promise<boolean> {
+  if (!HOSTHUB_API_KEY || !hosthubBookingId) return false
+  try {
+    const res = await fetch(`${HOSTHUB_BASE}/bookings/${hosthubBookingId}/messages`, {
+      method: 'POST',
+      headers: { 'Authorization': HOSTHUB_API_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message }),
+    })
+    if (!res.ok) {
+      console.error(`Hosthub msg error booking=${hosthubBookingId}: ${res.status} ${await res.text()}`)
+      return false
     }
-  } else {
-    return {
-      subject: `Booking Confirmation & Online Check-In — Tower 15 Suites`,
-      html: buildEnglishEmail(guestName, checkInFormatted, checkOutFormatted, checkinUrl, reservation.reservation_code),
-      text,
-    }
+    return true
+  } catch (e: any) {
+    console.error(`sendPlatformMessage exception: ${e.message}`)
+    return false
   }
 }
 
-function emailWrapper(content: string): string {
-  return `<!DOCTYPE html>
-<html lang="el">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-</head>
+// ── Email plain text ──────────────────────────────────────────
+function buildPlainText(reservation: any, checkinUrl: string, lang: 'el' | 'en'): string {
+  const firstName = reservation.guest_first_name || ''
+  const ciFmt = new Date(reservation.check_in_date).toLocaleDateString(lang === 'el' ? 'el-GR' : 'en-GB', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+  const coFmt = new Date(reservation.check_out_date).toLocaleDateString(lang === 'el' ? 'el-GR' : 'en-GB', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+
+  if (lang === 'el') {
+    return `Αγαπητέ/ή ${firstName},\n\nΣας ευχαριστούμε που επιλέξατε το Tower 15 Suites!\n\n📅 Check-in: ${ciFmt} από 15:00\n📅 Check-out: ${coFmt} έως 11:00\n📍 Ιωάννου Φαρμάκη 15, Θεσσαλονίκη 546 29\n\n🔗 Σύνδεσμος Online Check-In:\n${checkinUrl}\n\nΑριθμός Κράτησης: ${reservation.reservation_code}\n\nΕπικοινωνία: +30 6949655349\n\nTower 15 Suites`
+  } else {
+    return `Dear ${firstName},\n\nThank you for choosing Tower 15 Suites!\n\n📅 Check-in: ${ciFmt} from 15:00\n📅 Check-out: ${coFmt} by 11:00\n📍 Ioannou Farmaki 15, Thessaloniki 546 29\n\n🔗 Online Check-In Link:\n${checkinUrl}\n\nReservation Number: ${reservation.reservation_code}\n\nContact: +30 6949655349\n\nTower 15 Suites`
+  }
+}
+
+// ── HTML email builder ────────────────────────────────────────
+function emailWrapper(content: string, langAttr = 'el'): string {
+  return `<!DOCTYPE html><html lang="${langAttr}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
 <body style="margin:0;padding:0;background:#0f0e0d;font-family:'Georgia',serif;color:#f5f0e8;">
 <div style="max-width:580px;margin:0 auto;padding:24px;">
-
-  <!-- Header -->
   <div style="text-align:center;padding:40px 0 30px;border-bottom:1px solid #3d3935;">
     <img src="https://checkin.webrya.com/logo-tower15suites.png" alt="Tower 15 Suites" width="80" height="80" style="display:block;margin:0 auto;border-radius:8px;" />
     <h1 style="font-size:26px;font-weight:300;color:#f5f0e8;margin:14px 0 4px;letter-spacing:0.05em;">Tower 15 Suites</h1>
     <p style="color:#6b6460;font-size:12px;margin:0;font-family:sans-serif;text-transform:uppercase;letter-spacing:0.12em;">Thessaloniki, Greece</p>
   </div>
-
   ${content}
-
-  <!-- Footer -->
   <div style="text-align:center;padding-top:28px;border-top:1px solid #2d2b29;margin-top:32px;">
     <p style="font-family:sans-serif;font-size:12px;color:#4a4744;margin:0 0 4px;">Tower 15 Suites · Ιωάννου Φαρμάκη 15, Θεσσαλονίκη 546 29</p>
-    <p style="font-family:sans-serif;font-size:11px;color:#3d3a38;margin:4px 0;">
-      &nbsp;·&nbsp;
-      <a href="tel:+306949655349" style="color:#6b5c4a;text-decoration:none;">+30 6949655349</a>
-      &nbsp;·&nbsp;
-    </p>
-    <p style="font-family:sans-serif;font-size:10px;color:#2e2c2a;margin:8px 0 0;letter-spacing:0.05em;">
-      Designed &amp; Developed by <a href="https://webrya.com" style="color:#4a3f35;text-decoration:none;font-weight:bold;">Webrya</a>
-    </p>
+    <p style="font-family:sans-serif;font-size:11px;color:#3d3a38;margin:4px 0;"><a href="tel:+306949655349" style="color:#6b5c4a;text-decoration:none;">+30 6949655349</a></p>
+    <p style="font-family:sans-serif;font-size:10px;color:#2e2c2a;margin:8px 0 0;">Designed &amp; Developed by <a href="https://webrya.com" style="color:#4a3f35;text-decoration:none;font-weight:bold;">Webrya</a></p>
   </div>
-
-</div>
-</body>
-</html>`
+</div></body></html>`
 }
 
-function buildGreekEmail(guestName: string, checkIn: string, checkOut: string, url: string, resCode: string): string {
+function buildGreekEmail(name: string, ci: string, co: string, url: string, code: string): string {
   return emailWrapper(`
-  <!-- Greeting -->
   <div style="padding:32px 0 8px;">
-    <p style="font-size:18px;color:#d4bc98;margin:0 0 6px;font-weight:300;">Αγαπητέ/ή ${guestName},</p>
-    <p style="font-size:14px;color:#8a7f78;line-height:1.9;margin:0;font-family:sans-serif;">
-      Σας ευχαριστούμε που επιλέξατε το <strong style="color:#c09a68;">Tower 15 Suites</strong> για την επερχόμενη διαμονή σας! Ανυπομονούμε να σας υποδεχτούμε.
-    </p>
+    <p style="font-size:18px;color:#d4bc98;margin:0 0 6px;font-weight:300;">Αγαπητέ/ή ${name},</p>
+    <p style="font-size:14px;color:#8a7f78;line-height:1.9;margin:0;font-family:sans-serif;">Σας ευχαριστούμε που επιλέξατε το <strong style="color:#c09a68;">Tower 15 Suites</strong> για την επερχόμενη διαμονή σας!</p>
   </div>
-
-  <!-- Dates -->
   <div style="display:flex;gap:12px;margin:20px 0;">
     <div style="flex:1;background:#1a1816;border:1px solid #3d3935;padding:16px;text-align:center;">
       <div style="font-family:sans-serif;font-size:10px;color:#6b6460;text-transform:uppercase;letter-spacing:0.12em;margin-bottom:6px;">Check-in</div>
-      <div style="font-family:sans-serif;font-size:13px;color:#f5f0e8;line-height:1.4;">${checkIn}</div>
-      <div style="font-family:monospace;font-size:12px;color:#8B5E2A;margin-top:5px;font-weight:bold;">από 15:00</div>
+      <div style="font-family:sans-serif;font-size:13px;color:#f5f0e8;line-height:1.4;">${ci}</div>
+      <div style="font-family:monospace;font-size:11px;color:#8B5E2A;margin-top:6px;">από 15:00</div>
     </div>
     <div style="flex:1;background:#1a1816;border:1px solid #3d3935;padding:16px;text-align:center;">
       <div style="font-family:sans-serif;font-size:10px;color:#6b6460;text-transform:uppercase;letter-spacing:0.12em;margin-bottom:6px;">Check-out</div>
-      <div style="font-family:sans-serif;font-size:13px;color:#f5f0e8;line-height:1.4;">${checkOut}</div>
-      <div style="font-family:monospace;font-size:12px;color:#8B5E2A;margin-top:5px;font-weight:bold;">έως 11:00</div>
+      <div style="font-family:sans-serif;font-size:13px;color:#f5f0e8;line-height:1.4;">${co}</div>
+      <div style="font-family:monospace;font-size:11px;color:#8B5E2A;margin-top:6px;">έως 11:00</div>
     </div>
   </div>
-
-  <!-- Address -->
-  <div style="background:#1a1816;border:1px solid #2d2b29;padding:14px 18px;margin-bottom:24px;display:flex;align-items:center;gap:12px;">
-    <span style="font-size:20px;">📍</span>
-    <div>
-      <div style="font-family:sans-serif;font-size:11px;color:#6b6460;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:3px;">Διεύθυνση</div>
-      <div style="font-family:sans-serif;font-size:13px;color:#d4bc98;">Ιωάννου Φαρμάκη 15, Θεσσαλονίκη 546 29</div>
+  <div style="background:#1a1816;border:1px solid #2d2b29;padding:16px 20px;margin-bottom:20px;">
+    <div style="font-family:sans-serif;font-size:10px;color:#6b6460;text-transform:uppercase;letter-spacing:0.12em;margin-bottom:8px;">📍 Διεύθυνση</div>
+    <div style="font-family:sans-serif;font-size:13px;color:#d4bc98;">Ιωάννου Φαρμάκη 15, Θεσσαλονίκη 546 29</div>
+  </div>
+  <div style="background:#1a1410;border:1px solid #3d2e1e;padding:20px 24px;margin-bottom:20px;">
+    <div style="font-family:sans-serif;font-size:12px;color:#a07040;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:10px;font-weight:bold;">🔑 Online Check-In</div>
+    <p style="font-family:sans-serif;font-size:13px;color:#8a7f78;line-height:1.8;margin:0 0 16px;">Ολοκληρώστε το online check-in πριν την άφιξή σας. Θα λάβετε αυτόματα στις <strong style="color:#c09a68;">14:00</strong> της ημέρας άφιξής σας τους κωδικούς εισόδου.</p>
+    <div style="font-family:sans-serif;font-size:13px;color:#8a7f78;line-height:2.0;margin-bottom:20px;">🪪 &nbsp;Αστυνομική ταυτότητα ή διαβατήριο<br>⏱️ &nbsp;Διαρκεί μόνο 2–3 λεπτά</div>
+    <div style="text-align:center;padding:4px 0 8px;">
+      <a href="${url}" style="display:inline-block;background:#8B5E2A;color:white;text-decoration:none;padding:15px 44px;font-family:sans-serif;font-size:14px;letter-spacing:0.08em;text-transform:uppercase;font-weight:600;">Έναρξη Online Check-In →</a>
     </div>
   </div>
-
-  <!-- Divider -->
-  <div style="border-top:1px solid #3d3935;margin:24px 0;"></div>
-
-  <!-- Check-in CTA -->
-  <div style="margin-bottom:8px;">
-    <p style="font-family:sans-serif;font-size:14px;color:#8a7f78;line-height:1.9;margin:0 0 16px;">
-      Για να κάνουμε την άφιξή σας όσο πιο εύκολη γίνεται, παρακαλούμε ολοκληρώστε το <strong style="color:#c09a68;">online check-in</strong> πριν φτάσετε. Μόλις το ολοκληρώσετε, θα λάβετε αυτόματα τους <strong style="color:#c09a68;">κωδικούς εισόδου</strong> (keylocker &amp; WiFi) στις <strong style="color:#c09a68;">14:00</strong> της ημέρας άφιξής σας.
-    </p>
-  </div>
-
-  <!-- CTA Button -->
-  <div style="text-align:center;padding:20px 0 24px;">
-    <a href="${url}" style="display:inline-block;background:#8B5E2A;color:white;text-decoration:none;padding:15px 44px;font-family:sans-serif;font-size:14px;letter-spacing:0.08em;text-transform:uppercase;font-weight:600;">
-      Έναρξη Online Check-In →
-    </a>
-    <p style="font-family:sans-serif;font-size:11px;color:#4a4744;margin:12px 0 0;">
-      Ή αντιγράψτε: <span style="color:#8a7f78;word-break:break-all;">${url}</span>
-    </p>
-  </div>
-
-  <!-- Security notice -->
-  <div style="background:#1a1410;border:1px solid #3d2e1e;padding:14px 18px;margin-bottom:24px;">
-    <p style="font-family:sans-serif;font-size:12px;color:#8a7060;margin:0;line-height:1.8;">
-      ⚠️ <strong style="color:#c09a68;">Σημείωση ασφάλειας:</strong> Ο σύνδεσμος αυτός είναι επίσημος και ανήκει αποκλειστικά στο Tower 15 Suites. ΔΕΝ είναι phishing. Η διαδικασία είναι απολύτως νόμιμη και απαιτείται βάσει της ελληνικής νομοθεσίας βραχυχρόνιας μίσθωσης.
-    </p>
-  </div>
-
-  <!-- What you need -->
-  <div style="background:#1a1816;border:1px solid #2d2b29;padding:20px 24px;margin-bottom:24px;">
-    <div style="font-family:sans-serif;font-size:10px;color:#6b6460;text-transform:uppercase;letter-spacing:0.12em;margin-bottom:14px;">Τι θα χρειαστείτε</div>
-    <div style="font-family:sans-serif;font-size:13px;color:#8a7f78;line-height:2.0;">
-      🪪 &nbsp;Αστυνομική ταυτότητα ή διαβατήριο<br>
-      🔢 &nbsp;ΑΦΜ <span style="color:#6b6460;font-size:12px;">(μόνο για Έλληνες πολίτες — απαραίτητο για απόδειξη)</span><br>
-      📧 &nbsp;Email για την αποστολή των κωδικών<br>
-      ⏱️ &nbsp;Διαρκεί μόνο 2–3 λεπτά
-    </div>
-  </div>
-
-  <!-- Reservation code -->
-  <div style="background:#1a1816;border:1px solid #2d2b29;padding:12px 18px;margin-bottom:24px;">
+  <div style="background:#1a1816;border:1px solid #2d2b29;padding:12px 18px;margin-bottom:20px;">
     <div style="display:flex;justify-content:space-between;align-items:center;">
       <span style="font-family:sans-serif;font-size:11px;color:#6b6460;text-transform:uppercase;letter-spacing:0.1em;">Αριθμός Κράτησης</span>
-      <span style="font-family:monospace;font-size:15px;color:#c09a68;font-weight:bold;">${resCode}</span>
+      <span style="font-family:monospace;font-size:15px;color:#c09a68;font-weight:bold;">${code}</span>
     </div>
   </div>
-
-  <!-- Prefer not to use link -->
   <div style="padding:0 4px;margin-bottom:8px;">
-    <p style="font-family:sans-serif;font-size:12px;color:#6b6460;line-height:1.8;margin:0;">
-      Εάν δεν επιθυμείτε να χρησιμοποιήσετε τον σύνδεσμο, επικοινωνήστε μαζί μας απευθείας και θα σας βοηθήσουμε.<br>
-      📞 <a href="tel:+306949655349" style="color:#c09a68;text-decoration:none;font-weight:bold;">+30 6949655349</a>
-    </p>
-  </div>`)
+    <p style="font-family:sans-serif;font-size:12px;color:#6b6460;line-height:1.8;margin:0;">Επικοινωνία: 📞 <a href="tel:+306949655349" style="color:#c09a68;text-decoration:none;font-weight:bold;">+30 6949655349</a></p>
+  </div>`, 'el')
 }
 
-function buildEnglishEmail(guestName: string, checkIn: string, checkOut: string, url: string, resCode: string): string {
+function buildEnglishEmail(name: string, ci: string, co: string, url: string, code: string): string {
   return emailWrapper(`
-  <!-- Greeting -->
   <div style="padding:32px 0 8px;">
-    <p style="font-size:18px;color:#d4bc98;margin:0 0 6px;font-weight:300;">Dear ${guestName},</p>
-    <p style="font-size:14px;color:#8a7f78;line-height:1.9;margin:0;font-family:sans-serif;">
-      Thank you for choosing <strong style="color:#c09a68;">Tower 15 Suites</strong> for your upcoming stay! We look forward to welcoming you.
-    </p>
+    <p style="font-size:18px;color:#d4bc98;margin:0 0 6px;font-weight:300;">Dear ${name},</p>
+    <p style="font-size:14px;color:#8a7f78;line-height:1.9;margin:0;font-family:sans-serif;">Thank you for choosing <strong style="color:#c09a68;">Tower 15 Suites</strong> for your upcoming stay!</p>
   </div>
-
-  <!-- Dates -->
   <div style="display:flex;gap:12px;margin:20px 0;">
     <div style="flex:1;background:#1a1816;border:1px solid #3d3935;padding:16px;text-align:center;">
       <div style="font-family:sans-serif;font-size:10px;color:#6b6460;text-transform:uppercase;letter-spacing:0.12em;margin-bottom:6px;">Check-in</div>
-      <div style="font-family:sans-serif;font-size:13px;color:#f5f0e8;line-height:1.4;">${checkIn}</div>
-      <div style="font-family:monospace;font-size:12px;color:#8B5E2A;margin-top:5px;font-weight:bold;">from 15:00</div>
+      <div style="font-family:sans-serif;font-size:13px;color:#f5f0e8;line-height:1.4;">${ci}</div>
+      <div style="font-family:monospace;font-size:11px;color:#8B5E2A;margin-top:6px;">from 15:00</div>
     </div>
     <div style="flex:1;background:#1a1816;border:1px solid #3d3935;padding:16px;text-align:center;">
       <div style="font-family:sans-serif;font-size:10px;color:#6b6460;text-transform:uppercase;letter-spacing:0.12em;margin-bottom:6px;">Check-out</div>
-      <div style="font-family:sans-serif;font-size:13px;color:#f5f0e8;line-height:1.4;">${checkOut}</div>
-      <div style="font-family:monospace;font-size:12px;color:#8B5E2A;margin-top:5px;font-weight:bold;">by 11:00</div>
+      <div style="font-family:sans-serif;font-size:13px;color:#f5f0e8;line-height:1.4;">${co}</div>
+      <div style="font-family:monospace;font-size:11px;color:#8B5E2A;margin-top:6px;">by 11:00</div>
     </div>
   </div>
-
-  <!-- Address -->
-  <div style="background:#1a1816;border:1px solid #2d2b29;padding:14px 18px;margin-bottom:24px;display:flex;align-items:center;gap:12px;">
-    <span style="font-size:20px;">📍</span>
-    <div>
-      <div style="font-family:sans-serif;font-size:11px;color:#6b6460;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:3px;">Address</div>
-      <div style="font-family:sans-serif;font-size:13px;color:#d4bc98;">Ioannou Farmaki 15, Thessaloniki 546 29</div>
+  <div style="background:#1a1816;border:1px solid #2d2b29;padding:16px 20px;margin-bottom:20px;">
+    <div style="font-family:sans-serif;font-size:10px;color:#6b6460;text-transform:uppercase;letter-spacing:0.12em;margin-bottom:8px;">📍 Address</div>
+    <div style="font-family:sans-serif;font-size:13px;color:#d4bc98;">Ioannou Farmaki 15, Thessaloniki 546 29</div>
+  </div>
+  <div style="background:#1a1410;border:1px solid #3d2e1e;padding:20px 24px;margin-bottom:20px;">
+    <div style="font-family:sans-serif;font-size:12px;color:#a07040;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:10px;font-weight:bold;">🔑 Online Check-In</div>
+    <p style="font-family:sans-serif;font-size:13px;color:#8a7f78;line-height:1.8;margin:0 0 16px;">Complete your online check-in before you arrive. You will automatically receive your access codes at <strong style="color:#c09a68;">14:00</strong> on your arrival day.</p>
+    <div style="font-family:sans-serif;font-size:13px;color:#8a7f78;line-height:2.0;margin-bottom:20px;">🪪 &nbsp;National ID card or passport<br>⏱️ &nbsp;Only takes 2–3 minutes</div>
+    <div style="text-align:center;padding:4px 0 8px;">
+      <a href="${url}" style="display:inline-block;background:#8B5E2A;color:white;text-decoration:none;padding:15px 44px;font-family:sans-serif;font-size:14px;letter-spacing:0.08em;text-transform:uppercase;font-weight:600;">Start Online Check-In →</a>
     </div>
   </div>
-
-  <!-- Divider -->
-  <div style="border-top:1px solid #3d3935;margin:24px 0;"></div>
-
-  <!-- Check-in CTA -->
-  <div style="margin-bottom:8px;">
-    <p style="font-family:sans-serif;font-size:14px;color:#8a7f78;line-height:1.9;margin:0 0 16px;">
-      To make your arrival as smooth as possible, please complete your <strong style="color:#c09a68;">online check-in</strong> before you arrive. Once completed, you will automatically receive your <strong style="color:#c09a68;">access codes</strong> (keylocker &amp; WiFi) by email at <strong style="color:#c09a68;">14:00</strong> on your arrival day.
-    </p>
-  </div>
-
-  <!-- CTA Button -->
-  <div style="text-align:center;padding:20px 0 24px;">
-    <a href="${url}" style="display:inline-block;background:#8B5E2A;color:white;text-decoration:none;padding:15px 44px;font-family:sans-serif;font-size:14px;letter-spacing:0.08em;text-transform:uppercase;font-weight:600;">
-      Start Online Check-In →
-    </a>
-    <p style="font-family:sans-serif;font-size:11px;color:#4a4744;margin:12px 0 0;">
-      Or copy the link: <span style="color:#8a7f78;word-break:break-all;">${url}</span>
-    </p>
-  </div>
-
-  <!-- Security notice -->
-  <div style="background:#1a1410;border:1px solid #3d2e1e;padding:14px 18px;margin-bottom:24px;">
-    <p style="font-family:sans-serif;font-size:12px;color:#8a7060;margin:0;line-height:1.8;">
-      ⚠️ <strong style="color:#c09a68;">Security notice:</strong> This link is official and secure. It belongs exclusively to Tower 15 Suites and is NOT a phishing attempt. The process is fully legal and required under Greek short-term rental regulations.
-    </p>
-  </div>
-
-  <!-- What you need -->
-  <div style="background:#1a1816;border:1px solid #2d2b29;padding:20px 24px;margin-bottom:24px;">
-    <div style="font-family:sans-serif;font-size:10px;color:#6b6460;text-transform:uppercase;letter-spacing:0.12em;margin-bottom:14px;">What you will need</div>
-    <div style="font-family:sans-serif;font-size:13px;color:#8a7f78;line-height:2.0;">
-      🪪 &nbsp;National ID card or passport<br>
-      📧 &nbsp;Email address to receive your access codes<br>
-      ⏱️ &nbsp;Only takes 2–3 minutes
-    </div>
-  </div>
-
-  <!-- Reservation code -->
-  <div style="background:#1a1816;border:1px solid #2d2b29;padding:12px 18px;margin-bottom:24px;">
+  <div style="background:#1a1816;border:1px solid #2d2b29;padding:12px 18px;margin-bottom:20px;">
     <div style="display:flex;justify-content:space-between;align-items:center;">
       <span style="font-family:sans-serif;font-size:11px;color:#6b6460;text-transform:uppercase;letter-spacing:0.1em;">Reservation Number</span>
-      <span style="font-family:monospace;font-size:15px;color:#c09a68;font-weight:bold;">${resCode}</span>
+      <span style="font-family:monospace;font-size:15px;color:#c09a68;font-weight:bold;">${code}</span>
     </div>
   </div>
-
-  <!-- Prefer not to use link -->
   <div style="padding:0 4px;margin-bottom:8px;">
-    <p style="font-family:sans-serif;font-size:12px;color:#6b6460;line-height:1.8;margin:0;">
-      If you prefer not to use the link, please contact us directly and we will be happy to assist you.<br>
-      📞 <a href="tel:+306949655349" style="color:#c09a68;text-decoration:none;font-weight:bold;">+30 6949655349</a>
-    </p>
-  </div>`)
+    <p style="font-family:sans-serif;font-size:12px;color:#6b6460;line-height:1.8;margin:0;">Contact: 📞 <a href="tel:+306949655349" style="color:#c09a68;text-decoration:none;font-weight:bold;">+30 6949655349</a></p>
+  </div>`, 'en')
+}
+
+function buildEmail(reservation: any, checkinUrl: string): { subject: string; html: string; text: string } {
+  const lang    = detectLanguage(reservation.guest_first_name || '', reservation.guest_last_name || '')
+  const name    = reservation.guest_first_name || (lang === 'el' ? 'Επισκέπτη' : 'Guest')
+  const locale  = lang === 'el' ? 'el-GR' : 'en-GB'
+  const ci      = new Date(reservation.check_in_date).toLocaleDateString(locale, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+  const co      = new Date(reservation.check_out_date).toLocaleDateString(locale, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+  const text    = buildPlainText(reservation, checkinUrl, lang)
+  return lang === 'el'
+    ? { subject: `Επιβεβαίωση Κράτησης & Online Check-In — Tower 15 Suites`, html: buildGreekEmail(name, ci, co, checkinUrl, reservation.reservation_code), text }
+    : { subject: `Booking Confirmation & Online Check-In — Tower 15 Suites`, html: buildEnglishEmail(name, ci, co, checkinUrl, reservation.reservation_code), text }
 }
 
 async function sendEmail(to: string, subject: string, html: string, text: string) {
   const res = await fetch('https://api.resend.com/emails', {
     method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${RESEND_API_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      from: `${FROM_NAME} <${FROM_EMAIL}>`,
-      to: [to],
-      subject,
-      html,
-      text,  // ← plain text version: αυτό εμφανίζεται στο Hosthub/Booking.com Inbox
-    }),
+    headers: { 'Authorization': `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ from: `${FROM_NAME} <${FROM_EMAIL}>`, to: [to], subject, html, text }),
   })
   if (!res.ok) throw new Error(`Resend error: ${await res.text()}`)
   return res.json()
 }
 
-async function processReservation(reservation: any): Promise<boolean> {
-  if (!reservation.guest_email) return false
-  if (reservation.checkin_link_sent) return false
+async function processReservation(reservation: any): Promise<{ emailSent: boolean; platformSent: boolean }> {
+  const result = { emailSent: false, platformSent: false }
+  if (reservation.checkin_link_sent) return result
 
-  const checkinUrl = `${CHECKIN_PORTAL_URL}?reservation=${encodeURIComponent(reservation.reservation_code)}&lastname=${encodeURIComponent(reservation.guest_last_name || '')}`
-  const { subject, html, text } = buildEmail(reservation, checkinUrl)
+  const lang = detectLanguage(reservation.guest_first_name || '', reservation.guest_last_name || '')
+  const lastName = reservation.guest_last_name || ''
 
-  await sendEmail(reservation.guest_email, subject, html, text)
+  // 1. Email (with link) — only via Resend, never platform
+  if (reservation.guest_email) {
+    const url = `${CHECKIN_PORTAL_URL}?reservation=${encodeURIComponent(reservation.reservation_code)}&lastname=${encodeURIComponent(lastName)}`
+    const { subject, html, text } = buildEmail(reservation, url)
+    await sendEmail(reservation.guest_email, subject, html, text)
+    result.emailSent = true
+  }
 
-  await supabase
-    .from('reservations')
-    .update({ checkin_link_sent: true, checkin_link_sent_at: new Date().toISOString() })
-    .eq('id', reservation.id)
+  // 2. Platform message (NO link) — Hosthub inbox supports ONLY Booking.com and Airbnb
+  // Vrbo, Expedia, Direct etc. don't have messaging API via Hosthub — email only for those
+  const platformLower = (reservation.platform || '').toLowerCase()
+  const supportsPlatformMsg = reservation.hosthub_id &&
+    (platformLower.includes('booking') || platformLower.includes('airbnb'))
+  if (supportsPlatformMsg) {
+    const msg = buildPlatformMessage(reservation, lang)
+    result.platformSent = await sendPlatformMessage(reservation.hosthub_id, msg)
+  }
 
-  return true
+  // 3. Update DB
+  await supabase.from('reservations').update({
+    checkin_link_sent: true,
+    checkin_link_sent_at: new Date().toISOString(),
+    platform_message_sent: result.platformSent,
+    platform_message_sent_at: result.platformSent ? new Date().toISOString() : null,
+  }).eq('id', reservation.id)
+
+  return result
 }
 
 Deno.serve(async (req) => {
@@ -407,58 +306,29 @@ Deno.serve(async (req) => {
     let reservations: any[] = []
 
     if (body.reservationId) {
-      const { data, error } = await supabase
-        .from('reservations')
-        .select('*')
-        .eq('id', body.reservationId)
-        .single()
-      if (error || !data) {
-        return new Response(
-          JSON.stringify({ error: 'Reservation not found' }),
-          { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        )
-      }
+      const { data, error } = await supabase.from('reservations').select('*').eq('id', body.reservationId).single()
+      if (error || !data) return new Response(JSON.stringify({ error: 'Not found' }), { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+      if (body.force) data.checkin_link_sent = false
       reservations = [data]
     } else {
-      const targetDate = new Date()
-      targetDate.setDate(targetDate.getDate() + 2)
-      const target = targetDate.toISOString().split('T')[0]
-
-      const { data, error } = await supabase
-        .from('reservations')
-        .select('*')
-        .eq('check_in_date', target)
-        .eq('checkin_link_sent', false)
-        .not('guest_email', 'is', null)
+      const target = new Date(); target.setDate(target.getDate() + 2)
+      const targetStr = target.toISOString().split('T')[0]
+      const { data, error } = await supabase.from('reservations').select('*').eq('check_in_date', targetStr).eq('checkin_link_sent', false).not('guest_email', 'is', null)
       if (error) throw new Error(`Query error: ${JSON.stringify(error)}`)
       reservations = data || []
     }
 
-    let sent = 0, errors = 0
-
-    for (const reservation of reservations) {
+    let emailsSent = 0, platformSent = 0, errors = 0
+    for (const res of reservations) {
       try {
-        const ok = await processReservation(reservation)
-        if (ok) sent++
-      } catch (e: any) {
-        console.error(`Error for ${reservation.id}:`, e.message)
-        errors++
-      }
+        const r = await processReservation(res)
+        if (r.emailSent) emailsSent++
+        if (r.platformSent) platformSent++
+      } catch (e: any) { console.error(`Error ${res.id}:`, e.message); errors++ }
     }
 
-    return new Response(
-      JSON.stringify({
-        message: `✓ Εστάλησαν ${sent} emails. Σφάλματα: ${errors}`,
-        mode: body.reservationId ? 'single' : 'batch',
-        sent,
-        errors,
-      }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    )
+    return new Response(JSON.stringify({ message: `✓ Emails: ${emailsSent} | Platform: ${platformSent} | Errors: ${errors}`, emailsSent, platformSent, errors }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
   } catch (err: any) {
-    return new Response(
-      JSON.stringify({ error: err.message }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    )
+    return new Response(JSON.stringify({ error: err.message }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
   }
 })
