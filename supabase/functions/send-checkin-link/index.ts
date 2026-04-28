@@ -12,7 +12,7 @@ const supabase = createClient(
   Deno.env.get('SERVICE_ROLE_KEY')!
 )
 
-// ── Language detection from guest name ───────────────────────
+// ── Language detection ────────────────────────────────────────────────────────
 function detectLanguage(firstName: string, lastName: string): 'el' | 'en' {
   const name = `${firstName} ${lastName}`.toLowerCase()
   if (/[α-ωάέήίόύώϊϋΐΰ]/.test(name)) return 'el'
@@ -41,13 +41,15 @@ function detectLanguage(firstName: string, lastName: string): 'el' | 'en' {
   return 'en'
 }
 
-// ── Platform message (plain text, NO link — platforms strip external URLs) ─
+// ── Platform message (plain text, χωρίς link — οι πλατφόρμες τα αφαιρούν) ───
 function buildPlatformMessage(reservation: any, lang: 'el' | 'en'): string {
   const firstName = reservation.guest_first_name || ''
   const checkIn   = new Date(reservation.check_in_date)
   const checkOut  = new Date(reservation.check_out_date)
-  const ciFmt     = checkIn.toLocaleDateString(lang === 'el' ? 'el-GR' : 'en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
-  const coFmt     = checkOut.toLocaleDateString(lang === 'el' ? 'el-GR' : 'en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+  const locale    = lang === 'el' ? 'el-GR' : 'en-GB'
+  const opts: Intl.DateTimeFormatOptions = { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }
+  const ciFmt     = checkIn.toLocaleDateString(locale, opts)
+  const coFmt     = checkOut.toLocaleDateString(locale, opts)
 
   if (lang === 'el') {
     return `Αγαπητέ/ή ${firstName},
@@ -102,7 +104,7 @@ Tower 15 Suites`
   }
 }
 
-// ── Send via Hosthub Messages API (all platforms: Booking/Airbnb/Vrbo/etc.) ─
+// ── Send via Hosthub Messages API (Booking.com + Airbnb) ─────────────────────
 async function sendPlatformMessage(hosthubBookingId: string, message: string): Promise<boolean> {
   if (!HOSTHUB_API_KEY || !hosthubBookingId) return false
   try {
@@ -122,11 +124,13 @@ async function sendPlatformMessage(hosthubBookingId: string, message: string): P
   }
 }
 
-// ── Email plain text ──────────────────────────────────────────
+// ── Email plain text fallback ─────────────────────────────────────────────────
 function buildPlainText(reservation: any, checkinUrl: string, lang: 'el' | 'en'): string {
   const firstName = reservation.guest_first_name || ''
-  const ciFmt = new Date(reservation.check_in_date).toLocaleDateString(lang === 'el' ? 'el-GR' : 'en-GB', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
-  const coFmt = new Date(reservation.check_out_date).toLocaleDateString(lang === 'el' ? 'el-GR' : 'en-GB', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+  const locale = lang === 'el' ? 'el-GR' : 'en-GB'
+  const opts: Intl.DateTimeFormatOptions = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }
+  const ciFmt = new Date(reservation.check_in_date).toLocaleDateString(locale, opts)
+  const coFmt = new Date(reservation.check_out_date).toLocaleDateString(locale, opts)
 
   if (lang === 'el') {
     return `Αγαπητέ/ή ${firstName},\n\nΣας ευχαριστούμε που επιλέξατε το Tower 15 Suites!\n\n📅 Check-in: ${ciFmt} από 15:00\n📅 Check-out: ${coFmt} έως 11:00\n📍 Ιωάννου Φαρμάκη 15, Θεσσαλονίκη 546 29\n\n🔗 Σύνδεσμος Online Check-In:\n${checkinUrl}\n\nΑριθμός Κράτησης: ${reservation.reservation_code}\n\nΕπικοινωνία: +30 6949655349\n\nTower 15 Suites`
@@ -135,7 +139,7 @@ function buildPlainText(reservation: any, checkinUrl: string, lang: 'el' | 'en')
   }
 }
 
-// ── HTML email builder ────────────────────────────────────────
+// ── HTML email wrapper ────────────────────────────────────────────────────────
 function emailWrapper(content: string, langAttr = 'el'): string {
   return `<!DOCTYPE html><html lang="${langAttr}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
 <body style="margin:0;padding:0;background:#0f0e0d;font-family:'Georgia',serif;color:#f5f0e8;">
@@ -240,8 +244,9 @@ function buildEmail(reservation: any, checkinUrl: string): { subject: string; ht
   const lang    = detectLanguage(reservation.guest_first_name || '', reservation.guest_last_name || '')
   const name    = reservation.guest_first_name || (lang === 'el' ? 'Επισκέπτη' : 'Guest')
   const locale  = lang === 'el' ? 'el-GR' : 'en-GB'
-  const ci      = new Date(reservation.check_in_date).toLocaleDateString(locale, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
-  const co      = new Date(reservation.check_out_date).toLocaleDateString(locale, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+  const opts: Intl.DateTimeFormatOptions = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }
+  const ci      = new Date(reservation.check_in_date).toLocaleDateString(locale, opts)
+  const co      = new Date(reservation.check_out_date).toLocaleDateString(locale, opts)
   const text    = buildPlainText(reservation, checkinUrl, lang)
   return lang === 'el'
     ? { subject: `Επιβεβαίωση Κράτησης & Online Check-In — Tower 15 Suites`, html: buildGreekEmail(name, ci, co, checkinUrl, reservation.reservation_code), text }
@@ -260,12 +265,14 @@ async function sendEmail(to: string, subject: string, html: string, text: string
 
 async function processReservation(reservation: any): Promise<{ emailSent: boolean; platformSent: boolean }> {
   const result = { emailSent: false, platformSent: false }
+
+  // ΚΛΕΙΔΙ ΑΣΦΑΛΕΙΑΣ: αν checkin_link_sent=true, σταματάμε εδώ — ΠΟΤΕ duplicate
   if (reservation.checkin_link_sent) return result
 
-  const lang = detectLanguage(reservation.guest_first_name || '', reservation.guest_last_name || '')
+  const lang     = detectLanguage(reservation.guest_first_name || '', reservation.guest_last_name || '')
   const lastName = reservation.guest_last_name || ''
 
-  // 1. Email (with link) — only via Resend, never platform
+  // 1. Email με link — μόνο μέσω Resend
   if (reservation.guest_email) {
     const url = `${CHECKIN_PORTAL_URL}?reservation=${encodeURIComponent(reservation.reservation_code)}&lastname=${encodeURIComponent(lastName)}`
     const { subject, html, text } = buildEmail(reservation, url)
@@ -273,21 +280,21 @@ async function processReservation(reservation: any): Promise<{ emailSent: boolea
     result.emailSent = true
   }
 
-  // 2. Platform message (NO link) — Hosthub inbox supports ONLY Booking.com and Airbnb
-  // Vrbo, Expedia, Direct etc. don't have messaging API via Hosthub — email only for those
+  // 2. Platform message (χωρίς link) — Booking.com ΚΑΙ Airbnb μέσω Hosthub
   const platformLower = (reservation.platform || '').toLowerCase()
   const supportsPlatformMsg = reservation.hosthub_id &&
     (platformLower.includes('booking') || platformLower.includes('airbnb'))
+
   if (supportsPlatformMsg) {
     const msg = buildPlatformMessage(reservation, lang)
     result.platformSent = await sendPlatformMessage(reservation.hosthub_id, msg)
   }
 
-  // 3. Update DB
+  // 3. Update DB — checkin_link_sent=true ΜΕΤΑ από επιτυχή αποστολή
   await supabase.from('reservations').update({
-    checkin_link_sent: true,
-    checkin_link_sent_at: new Date().toISOString(),
-    platform_message_sent: result.platformSent,
+    checkin_link_sent:        true,
+    checkin_link_sent_at:     new Date().toISOString(),
+    platform_message_sent:    result.platformSent,
     platform_message_sent_at: result.platformSent ? new Date().toISOString() : null,
   }).eq('id', reservation.id)
 
@@ -306,14 +313,22 @@ Deno.serve(async (req) => {
     let reservations: any[] = []
 
     if (body.reservationId) {
+      // Single reservation — από sync-hosthub ή manual admin trigger
       const { data, error } = await supabase.from('reservations').select('*').eq('id', body.reservationId).single()
       if (error || !data) return new Response(JSON.stringify({ error: 'Not found' }), { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
-      if (body.force) data.checkin_link_sent = false
+      if (body.force) data.checkin_link_sent = false  // Admin force-resend
       reservations = [data]
     } else {
+      // CRON D-2: Στέλνει μόνο σε κρατήσεις που δεν έχουν λάβει link ακόμα
+      // Αυτό καλύπτει edge cases: κρατήσεις που μπήκαν χωρίς email και μόλις απέκτησαν
       const target = new Date(); target.setDate(target.getDate() + 2)
       const targetStr = target.toISOString().split('T')[0]
-      const { data, error } = await supabase.from('reservations').select('*').eq('check_in_date', targetStr).eq('checkin_link_sent', false).not('guest_email', 'is', null)
+      const { data, error } = await supabase
+        .from('reservations')
+        .select('*')
+        .eq('check_in_date', targetStr)
+        .eq('checkin_link_sent', false)
+        .not('guest_email', 'is', null)
       if (error) throw new Error(`Query error: ${JSON.stringify(error)}`)
       reservations = data || []
     }
@@ -327,7 +342,10 @@ Deno.serve(async (req) => {
       } catch (e: any) { console.error(`Error ${res.id}:`, e.message); errors++ }
     }
 
-    return new Response(JSON.stringify({ message: `✓ Emails: ${emailsSent} | Platform: ${platformSent} | Errors: ${errors}`, emailsSent, platformSent, errors }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+    return new Response(
+      JSON.stringify({ message: `✓ Emails: ${emailsSent} | Platform: ${platformSent} | Errors: ${errors}`, emailsSent, platformSent, errors }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    )
   } catch (err: any) {
     return new Response(JSON.stringify({ error: err.message }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
   }

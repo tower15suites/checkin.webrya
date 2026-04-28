@@ -12,10 +12,10 @@ const hosthubHeaders = {
   'Content-Type':  'application/json',
 }
 
-// checked_in: μην το σβήνεις από diff — ο guest είναι μέσα
+// checked_in: προστατεύεται από diff-delete (ο guest είναι μέσα)
 const PROTECTED_FROM_DIFF = new Set(['checked_in'])
 
-// ── Helper: σβήσε reservation + guest_checkins (manual cascade) ──────────────
+// ── Σβήσε reservation + guest_checkins (manual cascade) ──────────────────────
 async function safeDelete(id: string, hosthubId: string): Promise<boolean> {
   try {
     await supabase.from('guest_checkins').delete().eq('reservation_id', id)
@@ -29,7 +29,9 @@ async function safeDelete(id: string, hosthubId: string): Promise<boolean> {
   }
 }
 
-// ── Helper: στέλνει check-in link αμέσως μετά από νέα κράτηση ────────────────
+// ── Στέλνει check-in link αμέσως μετά νέα κράτηση ────────────────────────────
+// Ασφαλές να καλείται — η send-checkin-link ελέγχει checkin_link_sent=false
+// πριν στείλει, οπότε δεν υπάρχει κίνδυνος duplicate.
 async function triggerCheckinLink(reservationId: string): Promise<void> {
   try {
     const res = await fetch(`${SUPABASE_URL}/functions/v1/send-checkin-link`, {
@@ -41,7 +43,7 @@ async function triggerCheckinLink(reservationId: string): Promise<void> {
       body: JSON.stringify({ reservationId }),
     })
     const data = await res.json()
-    console.log(`Check-in link for ${reservationId}:`, data.message || data.error || 'sent')
+    console.log(`Check-in link for ${reservationId}:`, data.message || data.error || 'ok')
   } catch (e: any) {
     console.error(`triggerCheckinLink failed ${reservationId}:`, e.message)
   }
@@ -57,17 +59,15 @@ Deno.serve(async (req) => {
   try {
     const now   = new Date()
     const today = now.toISOString().split('T')[0]
-
-    // 11:00 Athens = UTC+3 → 08:00 UTC
     const utcHour = now.getUTCHours()
     const utcMin  = now.getUTCMinutes()
     const afterCheckout = utcHour > 8 || (utcHour === 8)
     console.log(`Sync start | today=${today} | UTC=${utcHour}:${String(utcMin).padStart(2,'0')} | afterCheckout=${afterCheckout}`)
 
-    // ── Step 1: Existing reservations για preservation ────────────────────────
+    // Step 1: Existing reservations
     const { data: existing, error: exErr } = await supabase
       .from('reservations')
-      .select('id, hosthub_id, status, codes_sent, codes_sent_at, checkin_link_sent, checkin_link_sent_at, guest_email')
+      .select('id, hosthub_id, status, codes_sent, codes_sent_at, checkin_link_sent, checkin_link_sent_at, platform_message_sent, platform_message_sent_at, guest_email')
       .not('hosthub_id', 'is', null)
     if (exErr) throw new Error(`Fetch existing: ${exErr.message}`)
 
@@ -75,16 +75,16 @@ Deno.serve(async (req) => {
       (existing || []).map((r: any) => [r.hosthub_id, r])
     )
 
-    // ── Step 2: Rentals από HostHub ───────────────────────────────────────────
+    // Step 2: Rentals από HostHub
     const rentalsRes = await fetch(`${HOSTHUB_BASE}/rentals`, { headers: hosthubHeaders })
     if (!rentalsRes.ok) throw new Error(`HostHub rentals: ${rentalsRes.status} ${await rentalsRes.text()}`)
     const rentals = (await rentalsRes.json()).data || []
     console.log(`HostHub rentals: ${rentals.length}`)
 
-    // ── Step 3: Rooms ─────────────────────────────────────────────────────────
+    // Step 3: Rooms
     const { data: rooms } = await supabase.from('rooms').select('id, room_number, hosthub_name')
 
-    // ── Step 4: Calendar events παράλληλα ─────────────────────────────────────
+    // Step 4: Calendar events παράλληλα
     const rentalResults = await Promise.all(rentals.map(async (rental: any) => {
       try {
         const name = (rental.name || '').trim()
@@ -109,7 +109,7 @@ Deno.serve(async (req) => {
       }
     }))
 
-    // ── Step 5: Upsert + αποστολή check-in link σε νέες κρατήσεις ────────────
+    // Step 5: Upsert + αποστολή check-in link σε νέες/updated κρατήσεις
     let synced = 0, upsertErrors = 0, linksSent = 0
     const syncedIds: string[] = []
 
@@ -120,30 +120,33 @@ Deno.serve(async (req) => {
           if (!hid) continue
           syncedIds.push(hid)
 
-          const ex        = existingMap.get(hid)
-          const isNew     = !ex  // δεν υπήρχε πριν
-          const status    = ex?.status === 'checked_in' ? 'checked_in' : 'pending'
-          const firstName = b.guest_first_name || (b.guest_name || '').split(' ')[0] || null
-          const lastName  = b.guest_last_name  || (b.guest_name || '').split(' ').slice(1).join(' ') || null
+          const ex         = existingMap.get(hid)
+          const isNew      = !ex
+          const status     = ex?.status === 'checked_in' ? 'checked_in' : 'pending'
+          const firstName  = b.guest_first_name || (b.guest_name || '').split(' ')[0] || null
+          const lastName   = b.guest_last_name  || (b.guest_name || '').split(' ').slice(1).join(' ') || null
           const guestEmail = b.guest_email || null
 
+          // ΚΡΙΣΙΜΟ: Preserve sent flags — ποτέ μην τα μηδενίζεις στο upsert
           const { data: upserted, error } = await supabase.from('reservations').upsert({
-            hosthub_id:           hid,
-            reservation_code:     b.reservation_id || hid,
-            room_id:              roomId,
-            guest_first_name:     firstName,
-            guest_last_name:      lastName,
-            guest_email:          guestEmail,
-            guest_phone:          b.guest_phone || null,
-            check_in_date:        b.date_from,
-            check_out_date:       b.date_to,
-            platform:             b.source?.name || b.source?.channel_type_code || 'hosthub',
-            raw_data:             b,
+            hosthub_id:               hid,
+            reservation_code:         b.reservation_id || hid,
+            room_id:                  roomId,
+            guest_first_name:         firstName,
+            guest_last_name:          lastName,
+            guest_email:              guestEmail,
+            guest_phone:              b.guest_phone || null,
+            check_in_date:            b.date_from,
+            check_out_date:           b.date_to,
+            platform:                 b.source?.name || b.source?.channel_type_code || 'hosthub',
+            raw_data:                 b,
             status,
-            codes_sent:           ex?.codes_sent          ?? false,
-            codes_sent_at:        ex?.codes_sent_at        ?? null,
-            checkin_link_sent:    ex?.checkin_link_sent    ?? false,
-            checkin_link_sent_at: ex?.checkin_link_sent_at ?? null,
+            codes_sent:               ex?.codes_sent               ?? false,
+            codes_sent_at:            ex?.codes_sent_at             ?? null,
+            checkin_link_sent:        ex?.checkin_link_sent         ?? false,
+            checkin_link_sent_at:     ex?.checkin_link_sent_at      ?? null,
+            platform_message_sent:    ex?.platform_message_sent     ?? false,
+            platform_message_sent_at: ex?.platform_message_sent_at  ?? null,
           }, { onConflict: 'hosthub_id' })
             .select('id, checkin_link_sent')
             .single()
@@ -151,10 +154,10 @@ Deno.serve(async (req) => {
           if (error) { console.error(`Upsert ${hid}:`, error.message); upsertErrors++; continue }
           synced++
 
-          // ── Στείλε check-in link αμέσως αν:
-          //    α) Νέα κράτηση ΚΑΙ έχει email ΚΑΙ check_in > σήμερα
-          //    β) Υπάρχουσα κράτηση που μόλις απέκτησε email (δεν είχε πριν)
-          // FIX: >= today για να στέλνει και σε κρατήσεις με check_in σήμερα
+          // Στέλνει check-in link αμέσως αν:
+          // α) Νέα κράτηση + έχει email + check_in >= σήμερα
+          // β) Υπάρχουσα κράτηση που μόλις απέκτησε email
+          // send-checkin-link ελέγχει checkin_link_sent → ποτέ duplicate
           const needsLink = upserted &&
             !upserted.checkin_link_sent &&
             guestEmail &&
@@ -169,7 +172,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    // ── Step 6: Diff-delete — ακυρωμένες ΜΕΛΛΟΝΤΙΚΕΣ κρατήσεις ──────────────
+    // Step 6: Diff-delete — ακυρωμένες μελλοντικές κρατήσεις
     let deleted = 0, deleteErrors = 0
 
     if (syncedIds.length > 0) {
@@ -192,9 +195,8 @@ Deno.serve(async (req) => {
       }
     }
 
-    // ── Step 7: Cleanup checkouts ─────────────────────────────────────────────
+    // Step 7: Cleanup παλαιών checkouts
     let cleaned = 0
-
     const { data: old } = await supabase
       .from('reservations')
       .select('id, hosthub_id')
@@ -214,14 +216,14 @@ Deno.serve(async (req) => {
         .eq('check_out_date', today)
 
       if (todayOuts?.length) {
-        console.log(`Cleaning ${todayOuts.length} today checkouts (after 11:30 Athens)`)
+        console.log(`Cleaning ${todayOuts.length} today checkouts (after 11:00 Athens)`)
         for (const r of todayOuts) {
           const ok = await safeDelete(r.id, r.hosthub_id)
           if (ok) cleaned++
         }
       }
     } else {
-      console.log('Today checkouts kept (before 11:30 Athens)')
+      console.log('Today checkouts kept (before 11:00 Athens)')
     }
 
     const msg = `✓ Synced:${synced} | Links:${linksSent} | Deleted:${deleted} | Cleaned:${cleaned} | Errors:${upsertErrors + deleteErrors}`
