@@ -184,13 +184,12 @@ export default function CheckInPortal() {
         } catch (e) { console.warn('send-codes non-fatal:', e) }
       }
 
-      // Στείλε platform confirmation message (Booking.com + Airbnb)
-      // Ενημερώνει τον guest ότι το check-in έγινε και οι κωδικοί έρχονται στο email
+      // Πάντα στέλνουμε platform confirmation (Booking.com / Airbnb)
       try {
         await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-checkin-confirmation`, {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ reservationId: reservation.id }),
+          body: JSON.stringify({ reservationId: reservation.id, isCheckinToday }),
         })
       } catch (e) { console.warn('send-checkin-confirmation non-fatal:', e) }
 

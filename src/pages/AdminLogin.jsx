@@ -5,7 +5,7 @@ import { useAdminAuth } from '../hooks/useAdminAuth.jsx'
 export default function AdminLogin() {
   const { login } = useAdminAuth()
   const navigate = useNavigate()
-  const [creds, setCreds] = useState({ username: '', password: '' })
+  const [creds, setCreds] = useState({ email: '', password: '' })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -13,12 +13,11 @@ export default function AdminLogin() {
     e.preventDefault()
     setError('')
     setLoading(true)
-    await new Promise(r => setTimeout(r, 500)) // small delay for UX
-    const ok = login(creds.username, creds.password)
-    if (ok) {
+    try {
+      await login(creds.email, creds.password)
       navigate('/admin')
-    } else {
-      setError('Λάθος credentials. Δοκιμάστε ξανά.')
+    } catch (err) {
+      setError('Λάθος email ή password. Δοκιμάστε ξανά.')
     }
     setLoading(false)
   }
@@ -34,14 +33,14 @@ export default function AdminLogin() {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="label">Username</label>
+            <label className="label">Email</label>
             <input
               className="input-field"
-              type="text"
-              autoComplete="username"
-              placeholder="alexmanel"
-              value={creds.username}
-              onChange={e => setCreds(c => ({ ...c, username: e.target.value }))}
+              type="email"
+              autoComplete="email"
+              placeholder="info@webrya.com"
+              value={creds.email}
+              onChange={e => setCreds(c => ({ ...c, email: e.target.value }))}
             />
           </div>
           <div>

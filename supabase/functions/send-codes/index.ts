@@ -256,8 +256,10 @@ async function sendEmail(to: string, subject: string, html: string, text: string
 }
 
 function isAfter1400Athens(): boolean {
-  const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Athens' }))
-  return now.getHours() >= 14
+  const athensHour = parseInt(new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Europe/Athens', hour: 'numeric', hour12: false,
+  }).format(new Date()))
+  return athensHour >= 14
 }
 
 Deno.serve(async (req) => {

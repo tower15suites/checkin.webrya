@@ -59,10 +59,12 @@ Deno.serve(async (req) => {
   try {
     const now   = new Date()
     const today = now.toISOString().split('T')[0]
-    const utcHour = now.getUTCHours()
-    const utcMin  = now.getUTCMinutes()
-    const afterCheckout = utcHour > 8 || (utcHour === 8)
-    console.log(`Sync start | today=${today} | UTC=${utcHour}:${String(utcMin).padStart(2,'0')} | afterCheckout=${afterCheckout}`)
+    // Χρησιμοποιούμε Intl API για σωστή ώρα Athens (UTC+2 χειμώνας / UTC+3 καλοκαίρι)
+    const athensHour = parseInt(new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Europe/Athens', hour: 'numeric', hour12: false,
+    }).format(now))
+    const afterCheckout = athensHour >= 11
+    console.log(`Sync start | today=${today} | Athens=${athensHour}:00 | afterCheckout=${afterCheckout}`)
 
     // Step 1: Existing reservations
     const { data: existing, error: exErr } = await supabase

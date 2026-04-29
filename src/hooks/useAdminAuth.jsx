@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect } from 'react'
+import { supabase } from '../lib/supabase.js'
 
 const AdminAuthContext = createContext(null)
 
@@ -7,24 +8,28 @@ export function AdminAuthProvider({ children }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const session = sessionStorage.getItem('admin_session')
-    if (session === 'authenticated') setIsAdmin(true)
-    setLoading(false)
+    // Check existing session on mount
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setIsAdmin(!!session)
+      setLoading(false)
+    })
+
+    // Listen for auth state changes (login/logout/token refresh)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setIsAdmin(!!session)
+    })
+
+    return () => subscription.unsubscribe()
   }, [])
 
-  const login = (username, password) => {
-    // Credentials checked client-side (hashed comparison via Edge Function in production)
-    if (username === 'alexmanel' && password === 'Devilakos1992!') {
-      setIsAdmin(true)
-      sessionStorage.setItem('admin_session', 'authenticated')
-      return true
-    }
-    return false
+  const login = async (email, password) => {
+    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    if (error) throw error
   }
 
-  const logout = () => {
+  const logout = async () => {
+    await supabase.auth.signOut()
     setIsAdmin(false)
-    sessionStorage.removeItem('admin_session')
   }
 
   return (
