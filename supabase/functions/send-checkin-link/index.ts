@@ -125,7 +125,7 @@ async function sendPlatformMessage(hosthubBookingId: string, message: string): P
 }
 
 // ── Email plain text fallback ─────────────────────────────────────────────────
-function buildPlainText(reservation: any, checkinUrl: string, lang: 'el' | 'en'): string {
+function buildPlainText(reservation: any, checkinUrl: string, lang: 'el' | 'en', roomNote?: string): string {
   const firstName = reservation.guest_first_name || ''
   const locale = lang === 'el' ? 'el-GR' : 'en-GB'
   const opts: Intl.DateTimeFormatOptions = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }
@@ -158,7 +158,7 @@ function emailWrapper(content: string, langAttr = 'el'): string {
 </div></body></html>`
 }
 
-function buildGreekEmail(name: string, ci: string, co: string, url: string, code: string): string {
+function buildGreekEmail(name: string, ci: string, co: string, url: string, code: string, roomNote?: string): string {
   return emailWrapper(`
   <div style="padding:32px 0 8px;">
     <p style="font-size:18px;color:#d4bc98;margin:0 0 6px;font-weight:300;">Αγαπητέ/ή ${name},</p>
@@ -180,6 +180,7 @@ function buildGreekEmail(name: string, ci: string, co: string, url: string, code
     <div style="font-family:sans-serif;font-size:10px;color:#6b6460;text-transform:uppercase;letter-spacing:0.12em;margin-bottom:8px;">📍 Διεύθυνση</div>
     <div style="font-family:sans-serif;font-size:13px;color:#d4bc98;">Ιωάννου Φαρμάκη 15, Θεσσαλονίκη 546 29</div>
   </div>
+  ${roomNote ? `<div style="background:#1a1816;border:1px solid #2d2b29;padding:12px 20px;margin-bottom:20px;"><div style="font-family:sans-serif;font-size:13px;color:#c09a68;">${roomNote}</div></div>` : ''}
   <div style="background:#1a1410;border:1px solid #3d2e1e;padding:20px 24px;margin-bottom:20px;">
     <div style="font-family:sans-serif;font-size:12px;color:#a07040;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:10px;font-weight:bold;">🔑 Online Check-In</div>
     <p style="font-family:sans-serif;font-size:13px;color:#8a7f78;line-height:1.8;margin:0 0 16px;">Ολοκληρώστε το online check-in πριν την άφιξή σας. Θα λάβετε αυτόματα στις <strong style="color:#c09a68;">14:00</strong> της ημέρας άφιξής σας τους κωδικούς εισόδου.</p>
@@ -199,7 +200,7 @@ function buildGreekEmail(name: string, ci: string, co: string, url: string, code
   </div>`, 'el')
 }
 
-function buildEnglishEmail(name: string, ci: string, co: string, url: string, code: string): string {
+function buildEnglishEmail(name: string, ci: string, co: string, url: string, code: string, roomNote?: string): string {
   return emailWrapper(`
   <div style="padding:32px 0 8px;">
     <p style="font-size:18px;color:#d4bc98;margin:0 0 6px;font-weight:300;">Dear ${name},</p>
@@ -221,6 +222,7 @@ function buildEnglishEmail(name: string, ci: string, co: string, url: string, co
     <div style="font-family:sans-serif;font-size:10px;color:#6b6460;text-transform:uppercase;letter-spacing:0.12em;margin-bottom:8px;">📍 Address</div>
     <div style="font-family:sans-serif;font-size:13px;color:#d4bc98;">Ioannou Farmaki 15, Thessaloniki 546 29</div>
   </div>
+  ${roomNote ? `<div style="background:#1a1816;border:1px solid #2d2b29;padding:12px 20px;margin-bottom:20px;"><div style="font-family:sans-serif;font-size:13px;color:#c09a68;">${roomNote}</div></div>` : ''}
   <div style="background:#1a1410;border:1px solid #3d2e1e;padding:20px 24px;margin-bottom:20px;">
     <div style="font-family:sans-serif;font-size:12px;color:#a07040;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:10px;font-weight:bold;">🔑 Online Check-In</div>
     <p style="font-family:sans-serif;font-size:13px;color:#8a7f78;line-height:1.8;margin:0 0 16px;">Complete your online check-in before you arrive. You will automatically receive your access codes at <strong style="color:#c09a68;">14:00</strong> on your arrival day.</p>
@@ -249,8 +251,8 @@ function buildEmail(reservation: any, checkinUrl: string): { subject: string; ht
   const co      = new Date(reservation.check_out_date).toLocaleDateString(locale, opts)
   const text    = buildPlainText(reservation, checkinUrl, lang)
   return lang === 'el'
-    ? { subject: `Επιβεβαίωση Κράτησης & Online Check-In — Tower 15 Suites`, html: buildGreekEmail(name, ci, co, checkinUrl, reservation.reservation_code), text }
-    : { subject: `Booking Confirmation & Online Check-In — Tower 15 Suites`, html: buildEnglishEmail(name, ci, co, checkinUrl, reservation.reservation_code), text }
+    ? { subject: `Επιβεβαίωση Κράτησης & Online Check-In — Tower 15 Suites`, html: buildGreekEmail(name, ci, co, checkinUrl, reservation.reservation_code, undefined), text }
+    : { subject: `Booking Confirmation & Online Check-In — Tower 15 Suites`, html: buildEnglishEmail(name, ci, co, checkinUrl, reservation.reservation_code, undefined), text }
 }
 
 async function sendEmail(to: string, subject: string, html: string, text: string) {
@@ -301,6 +303,75 @@ async function processReservation(reservation: any): Promise<{ emailSent: boolea
   return result
 }
 
+// ── Multi-room email: 1 email με όλα τα δωμάτια ─────────────────────────────
+async function processMultiRoomReservations(reservations: any[], force = false): Promise<{ platformSent: boolean }> {
+  const result = { platformSent: false }
+  const first = reservations[0]
+
+  // Guard: αν το πρώτο δωμάτιο έχει ήδη σταλεί και δεν είναι force, skip
+  if (!force && first.checkin_link_sent) return result
+
+  const lang     = detectLanguage(first.guest_first_name || '', first.guest_last_name || '')
+  const name     = first.guest_first_name || (lang === 'el' ? 'Επισκέπτη' : 'Guest')
+  const lastName = first.guest_last_name || ''
+  const email    = first.guest_email
+
+  if (!email) return result
+
+  const locale = lang === 'el' ? 'el-GR' : 'en-GB'
+  const opts: Intl.DateTimeFormatOptions = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }
+  const ci = new Date(first.check_in_date).toLocaleDateString(locale, opts)
+  const co = new Date(first.check_out_date).toLocaleDateString(locale, opts)
+
+  // Κωδικός check-in — χρησιμοποιούμε τον κοινό reservation_code
+  const code = first.reservation_code
+
+  // Link — 1 link που αφορά όλη την κράτηση (χρησιμοποιεί reservation_code)
+  const url = `${CHECKIN_PORTAL_URL}?reservation=${encodeURIComponent(code)}&lastname=${encodeURIComponent(lastName)}`
+
+  // Δωμάτια για εμφάνιση στο email
+  const roomList = reservations
+    .map((r: any) => r.rooms?.room_number || '—')
+    .filter(Boolean)
+    .join(', ')
+
+  // Build email με mention πολλαπλών δωματίων
+  const subject = lang === 'el'
+    ? `Επιβεβαίωση Κράτησης & Online Check-In — Tower 15 Suites`
+    : `Booking Confirmation & Online Check-In — Tower 15 Suites`
+
+  const roomNote = lang === 'el'
+    ? `🏠 Δωμάτια: ${roomList}`
+    : `🏠 Rooms: ${roomList}`
+
+  const html = lang === 'el'
+    ? buildGreekEmail(name, ci, co, url, code, roomNote)
+    : buildEnglishEmail(name, ci, co, url, code, roomNote)
+  const text = buildPlainText(first, url, lang, roomNote)
+
+  await sendEmail(email, subject, html, text)
+
+  // Platform message — μόνο 1 φορά (για το πρώτο δωμάτιο)
+  const platformLower = (first.platform || '').toLowerCase()
+  if (first.hosthub_id && (platformLower.includes('booking') || platformLower.includes('airbnb'))) {
+    const msg = buildPlatformMessage(first, lang)
+    result.platformSent = await sendPlatformMessage(first.hosthub_id, msg)
+  }
+
+  // Mark όλα τα δωμάτια ως sent
+  const now = new Date().toISOString()
+  await supabase.from('reservations')
+    .update({
+      checkin_link_sent:        true,
+      checkin_link_sent_at:     now,
+      platform_message_sent:    result.platformSent,
+      platform_message_sent_at: result.platformSent ? now : null,
+    })
+    .in('id', reservations.map((r: any) => r.id))
+
+  return result
+}
+
 Deno.serve(async (req) => {
   const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -312,7 +383,23 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}))
     let reservations: any[] = []
 
-    if (body.reservationId) {
+    if (body.reservationIds && Array.isArray(body.reservationIds) && body.reservationIds.length > 1) {
+      // Multi-room: φόρτωσε όλες τις κρατήσεις και στείλε 1 email με όλα τα δωμάτια
+      const { data, error } = await supabase
+        .from('reservations')
+        .select('*, rooms(room_number, floor)')
+        .in('id', body.reservationIds)
+      if (error || !data?.length) return new Response(JSON.stringify({ error: 'Not found' }), { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+      // Guard: αν ΌΛΑ έχουν ήδη link, skip
+      if (data.every((r: any) => r.checkin_link_sent)) {
+        return new Response(JSON.stringify({ message: 'All rooms already sent', skipped: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+      }
+      const result = await processMultiRoomReservations(data, body.force)
+      return new Response(
+        JSON.stringify({ message: `✓ Multi-room email sent | Rooms: ${data.length} | Platform: ${result.platformSent}` }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    } else if (body.reservationId) {
       // Single reservation — από sync-hosthub ή manual admin trigger
       const { data, error } = await supabase.from('reservations').select('*').eq('id', body.reservationId).single()
       if (error || !data) return new Response(JSON.stringify({ error: 'Not found' }), { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })

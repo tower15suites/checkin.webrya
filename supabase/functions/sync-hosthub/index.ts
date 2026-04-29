@@ -32,18 +32,22 @@ async function safeDelete(id: string, hosthubId: string): Promise<boolean> {
 // ── Στέλνει check-in link αμέσως μετά νέα κράτηση ────────────────────────────
 // Ασφαλές να καλείται — η send-checkin-link ελέγχει checkin_link_sent=false
 // πριν στείλει, οπότε δεν υπάρχει κίνδυνος duplicate.
-async function triggerCheckinLink(reservationId: string): Promise<void> {
+// reservationIds: αν περαστεί array, στέλνουμε 1 email για όλα τα δωμάτια (multi-room)
+async function triggerCheckinLink(reservationId: string, reservationIds?: string[]): Promise<void> {
   try {
+    const body = reservationIds && reservationIds.length > 1
+      ? { reservationIds }          // multi-room: array
+      : { reservationId }           // single room: ίδιο με πριν
     const res = await fetch(`${SUPABASE_URL}/functions/v1/send-checkin-link`, {
       method: 'POST',
       headers: {
         'Content-Type':  'application/json',
         'Authorization': `Bearer ${SERVICE_ROLE_KEY}`,
       },
-      body: JSON.stringify({ reservationId }),
+      body: JSON.stringify(body),
     })
     const data = await res.json()
-    console.log(`Check-in link for ${reservationId}:`, data.message || data.error || 'ok')
+    console.log(`Check-in link for ${reservationIds ? reservationIds.join(',') : reservationId}:`, data.message || data.error || 'ok')
   } catch (e: any) {
     console.error(`triggerCheckinLink failed ${reservationId}:`, e.message)
   }
@@ -111,9 +115,13 @@ Deno.serve(async (req) => {
       }
     }))
 
-    // Step 5: Upsert + αποστολή check-in link σε νέες/updated κρατήσεις
+    // Step 5: Upsert + συλλογή IDs για αποστολή check-in link
     let synced = 0, upsertErrors = 0, linksSent = 0
     const syncedIds: string[] = []
+
+    // Map: `${reservation_code}::${guest_email}` → array of reservation IDs που χρειάζονται link
+    // Multi-room grouping: 1 email για όλα τα δωμάτια ίδιας κράτησης
+    const pendingLinks = new Map<string, string[]>()
 
     for (const { bookings, roomId } of rentalResults) {
       for (const b of bookings) {
@@ -156,10 +164,6 @@ Deno.serve(async (req) => {
           if (error) { console.error(`Upsert ${hid}:`, error.message); upsertErrors++; continue }
           synced++
 
-          // Στέλνει check-in link αμέσως αν:
-          // α) Νέα κράτηση + έχει email + check_in >= σήμερα
-          // β) Υπάρχουσα κράτηση που μόλις απέκτησε email
-          // send-checkin-link ελέγχει checkin_link_sent → ποτέ duplicate
           const needsLink = upserted &&
             !upserted.checkin_link_sent &&
             guestEmail &&
@@ -167,10 +171,23 @@ Deno.serve(async (req) => {
             (isNew || (!ex?.guest_email && guestEmail))
 
           if (needsLink) {
-            await triggerCheckinLink(upserted.id)
-            linksSent++
+            const resCode = b.reservation_id || hid
+            const groupKey = `${resCode}::${guestEmail}`
+            const group = pendingLinks.get(groupKey) || []
+            group.push(upserted.id)
+            pendingLinks.set(groupKey, group)
           }
         } catch (e: any) { upsertErrors++ }
+      }
+    }
+
+    // Step 5b: Αποστολή — 1 email ανά group (multi-room → 1 email με όλα τα δωμάτια)
+    for (const [, reservationIds] of pendingLinks) {
+      try {
+        await triggerCheckinLink(reservationIds[0], reservationIds.length > 1 ? reservationIds : undefined)
+        linksSent++
+      } catch (e: any) {
+        console.error(`triggerCheckinLink group error:`, e)
       }
     }
 
